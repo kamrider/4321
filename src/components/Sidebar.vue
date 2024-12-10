@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+const emit = defineEmits(['menu-click'])
+
 const isCollapsed = ref(false)
 
 const menuItems = [
@@ -26,6 +28,10 @@ const menuItems = [
   }
 ]
 
+const handleMenuClick = (route: string) => {
+  emit('menu-click', route)
+}
+
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
 }
@@ -37,7 +43,8 @@ const toggleSidebar = () => {
       <div v-for="item in menuItems" 
            :key="item.label" 
            class="menu-item"
-           :title="isCollapsed ? item.label : ''">
+           :title="isCollapsed ? item.label : ''"
+           @click="handleMenuClick(item.route)">
         <span class="icon">{{ item.icon }}</span>
         <span class="label" v-show="!isCollapsed">{{ item.label }}</span>
       </div>

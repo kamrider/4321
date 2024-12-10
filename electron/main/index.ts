@@ -1,8 +1,9 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
+import * as fs from 'fs'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -42,6 +43,10 @@ let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
+// 在文件顶部定义全局变量
+let isCancelled = false;
+let targetDirectory = path.join(app.getPath('userData'), 'uploads');
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Main window',
@@ -68,6 +73,7 @@ async function createWindow() {
   // Test actively push message to the Electron-Renderer
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', new Date().toLocaleString())
+    win?.webContents.send('storage-path', targetDirectory);
   })
 
   // Make all links open with the browser, not with the application
@@ -118,3 +124,120 @@ ipcMain.handle('open-win', (_, arg) => {
     childWindow.loadFile(indexHtml, { hash: arg })
   }
 })
+
+ipcMain.handle('file:select', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: '图片文件', extensions: ['jpg', 'jpeg', 'png'] },
+      { name: '所有文件', extensions: ['*'] },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+})
+
+ipcMain.handle('file:upload', async (event, filePath) => {
+  try {
+    isCancelled = false;
+    
+    // 确保目标目录存在
+    if (!fs.existsSync(targetDirectory)) {
+      fs.mkdirSync(targetDirectory, { recursive: true });
+    }
+
+    const fileName = path.basename(filePath);
+    const targetPath = path.join(targetDirectory, fileName);
+    
+    const fileSize = fs.statSync(filePath).size;
+    const chunkSize = 1024 * 100;
+    let uploadedSize = 0;
+
+    const readStream = fs.createReadStream(filePath, { highWaterMark: chunkSize });
+    const writeStream = fs.createWriteStream(targetPath);
+
+    for await (const chunk of readStream) {
+      if (isCancelled) {
+        readStream.destroy();
+        writeStream.destroy();
+        fs.unlinkSync(targetPath); // 删除未完成的文件
+        event.sender.send('file:progress', { progress: 0, status: 'cancelled' });
+        return { success: false, message: 'Upload cancelled' };
+      }
+
+      writeStream.write(chunk);
+      uploadedSize += chunk.length;
+      
+      const progress = Math.min((uploadedSize / fileSize) * 100, 100).toFixed(2);
+      event.sender.send('file:progress', { 
+        progress: parseFloat(progress), 
+        status: 'uploading',
+        targetPath 
+      });
+      
+      // 模拟网络延迟
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    writeStream.end();
+    
+    return { 
+      success: true, 
+      targetPath,
+      message: `文件已保存至: ${targetPath}` 
+    };
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw error;
+  }
+})
+
+ipcMain.handle('file:cancel', () => {
+  isCancelled = true;
+  return { cancelled: true };
+})
+
+ipcMain.handle('file:preview', async (event, filePath) => {
+  try {
+    const supportedExtensions = ['jpg', 'jpeg', 'png'];
+    const fileExtension = path.extname(filePath).toLowerCase().slice(1);
+
+    if (!supportedExtensions.includes(fileExtension)) {
+      throw new Error('Unsupported file type for preview.');
+    }
+
+    const fileData = fs.readFileSync(filePath);
+    const base64Data = fileData.toString('base64');
+    return { previewUrl: `data:image/${fileExtension};base64,${base64Data}` };
+  } catch (error) {
+    console.error('Error generating preview:', error);
+    throw new Error('Unable to generate preview');
+  }
+})
+
+// 添加获取存储目录的处理程序
+ipcMain.handle('file:get-storage-path', () => {
+  return targetDirectory;
+})
+
+// 添加设置存储目录的处理程序
+ipcMain.handle('file:set-storage-path', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: '选择文件存储位置'
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    targetDirectory = result.filePaths[0];
+    return targetDirectory;
+  }
+  return null;
+})
+
+// 添加重置存储目录的处理程序
+ipcMain.handle('file:reset-storage-path', () => {
+  targetDirectory = path.join(app.getPath('userData'), 'uploads');
+  return targetDirectory;
+});

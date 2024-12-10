@@ -22,20 +22,80 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // 添加文件操作相关的方法
   uploadFile: {
     // 选择文件
-    select: () => ipcRenderer.invoke('file:select'),
+    select: async () => {
+      try {
+        return await ipcRenderer.invoke('file:select');
+      } catch (error) {
+        console.error('Error selecting file:', error);
+        throw error;
+      }
+    },
     
     // 开始上传文件
-    start: (filePath: string) => ipcRenderer.invoke('file:upload', filePath),
+    start: (filePath: string) => {
+      if (!filePath || typeof filePath !== 'string') {
+        throw new Error('Invalid filePath provided for upload.');
+      }
+      return ipcRenderer.invoke('file:upload', filePath);
+    },
     
     // 获取上传进度
-    onProgress: (callback: (progress: number) => void) => 
-      ipcRenderer.on('file:progress', (_event, progress) => callback(progress)),
+    onProgress: (callback: (progress: UploadProgress) => void) => {
+      const listener = (_event, progress) => callback(progress);
+      ipcRenderer.on('file:progress', listener);
+      return () => ipcRenderer.removeListener('file:progress', listener);
+    },
     
     // 取消上传
-    cancel: () => ipcRenderer.invoke('file:cancel'),
+    cancel: async () => {
+      try {
+        const result = await ipcRenderer.invoke('file:cancel');
+        return { success: true, result };
+      } catch (error) {
+        console.error('Error canceling upload:', error);
+        return { success: false, error };
+      }
+    },
     
     // 获取文件预览
-    getPreview: (filePath: string) => ipcRenderer.invoke('file:preview', filePath)
+    getPreview: async (filePath: string) => {
+      try {
+        return await ipcRenderer.invoke('file:preview', filePath);
+      } catch (error) {
+        console.error('Error getting file preview:', error);
+        throw error;
+      }
+    },
+
+    // 获取存储路径
+    getStoragePath: async () => {
+      try {
+        return await ipcRenderer.invoke('file:get-storage-path');
+      } catch (error) {
+        console.error('Error getting storage path:', error);
+        throw error;
+      }
+    },
+
+    // 设置存储路径
+    setStoragePath: async () => {
+      try {
+        return await ipcRenderer.invoke('file:set-storage-path');
+      } catch (error) {
+        console.error('Error setting storage path:', error);
+        throw error;
+      }
+    },
+
+    // 重置存储路径
+    resetStoragePath: async () => {
+      try {
+        return await ipcRenderer.invoke('file:reset-storage-path');
+      } catch (error) {
+        console.error('Error resetting storage path:', error);
+        throw error;
+      }
+    }
   }
 
   // You can expose other APTs you need here.

@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import Sidebar from './components/Sidebar.vue'
-import UploadMistake from './components/UploadMistake.vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const handleMenuClick = (route: string) => {
+  router.push(route)
+}
 </script>
 
 <template>
   <div class="app-container">
-    <Sidebar />
+    <Sidebar @menu-click="handleMenuClick" />
     <div class="main-content">
-      <UploadMistake />
+      <router-view></router-view>
     </div>
   </div>
 </template>

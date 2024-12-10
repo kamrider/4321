@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import * as fs from 'fs'
+import Store from 'electron-store'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -43,9 +44,24 @@ let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
-// 在文件顶部定义全局变量
-let isCancelled = false;
-let targetDirectory = path.join(app.getPath('userData'), 'uploads');
+// 初始化 store 和默认路径
+const store = new Store()
+const DEFAULT_STORAGE_PATH = path.join(app.getPath('userData'), 'uploads')
+
+// 获取存储路径，如果不存在则使用默认路径
+let targetDirectory = store.get('storagePath', DEFAULT_STORAGE_PATH)
+
+// 检查路径是否存在且可写
+try {
+  if (!fs.existsSync(targetDirectory)) {
+    fs.mkdirSync(targetDirectory, { recursive: true })
+  }
+  fs.accessSync(targetDirectory, fs.constants.W_OK)
+} catch (error) {
+  console.error('存储路径不可用，使用默认路径:', error)
+  targetDirectory = DEFAULT_STORAGE_PATH
+  store.set('storagePath', DEFAULT_STORAGE_PATH)
+}
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -230,14 +246,26 @@ ipcMain.handle('file:set-storage-path', async () => {
   });
 
   if (!result.canceled && result.filePaths.length > 0) {
-    targetDirectory = result.filePaths[0];
-    return targetDirectory;
+    const newPath = result.filePaths[0];
+    try {
+      // 验证路径是否可写
+      fs.accessSync(newPath, fs.constants.W_OK);
+      targetDirectory = newPath;
+      store.set('storagePath', targetDirectory);
+      return targetDirectory;
+    } catch (error) {
+      throw new Error('选定路径不可写，请选择其他路径');
+    }
   }
   return null;
 })
 
 // 添加重置存储目录的处理程序
 ipcMain.handle('file:reset-storage-path', () => {
-  targetDirectory = path.join(app.getPath('userData'), 'uploads');
-  return targetDirectory;
+  if (!fs.existsSync(DEFAULT_STORAGE_PATH)) {
+    fs.mkdirSync(DEFAULT_STORAGE_PATH, { recursive: true });
+  }
+  targetDirectory = DEFAULT_STORAGE_PATH;
+  store.set('storagePath', DEFAULT_STORAGE_PATH);
+  return DEFAULT_STORAGE_PATH;
 });

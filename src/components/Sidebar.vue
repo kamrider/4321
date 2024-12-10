@@ -40,14 +40,17 @@ const toggleSidebar = () => {
 <template>
   <div class="sidebar" :class="{ 'collapsed': isCollapsed }">
     <div class="menu-items">
-      <div v-for="item in menuItems" 
-           :key="item.label" 
-           class="menu-item"
-           :title="isCollapsed ? item.label : ''"
-           @click="handleMenuClick(item.route)">
+      <router-link
+        v-for="item in menuItems"
+        :key="item.label"
+        :to="item.route"
+        class="menu-item"
+        :title="isCollapsed ? item.label : ''"
+        active-class="active"
+      >
         <span class="icon">{{ item.icon }}</span>
         <span class="label" v-show="!isCollapsed">{{ item.label }}</span>
-      </div>
+      </router-link>
     </div>
     
     <div class="toggle-btn" @click="toggleSidebar">
@@ -150,5 +153,13 @@ const toggleSidebar = () => {
 
 .collapsed .label {
   opacity: 0;
+}
+
+.active {
+  background: #34495e;
+}
+
+.active .icon {
+  color: #42b983;
 }
 </style> 

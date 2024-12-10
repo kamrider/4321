@@ -19,6 +19,25 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     return ipcRenderer.invoke(channel, ...omit)
   },
 
+  // 添加文件操作相关的方法
+  uploadFile: {
+    // 选择文件
+    select: () => ipcRenderer.invoke('file:select'),
+    
+    // 开始上传文件
+    start: (filePath: string) => ipcRenderer.invoke('file:upload', filePath),
+    
+    // 获取上传进度
+    onProgress: (callback: (progress: number) => void) => 
+      ipcRenderer.on('file:progress', (_event, progress) => callback(progress)),
+    
+    // 取消上传
+    cancel: () => ipcRenderer.invoke('file:cancel'),
+    
+    // 获取文件预览
+    getPreview: (filePath: string) => ipcRenderer.invoke('file:preview', filePath)
+  }
+
   // You can expose other APTs you need here.
   // ...
 })

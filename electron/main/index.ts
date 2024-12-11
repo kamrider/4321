@@ -47,6 +47,7 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 // 初始化 store 和默认路径
 const store = new Store()
 const DEFAULT_STORAGE_PATH = path.join(app.getPath('userData'), 'uploads')
+let isCancelled = false
 
 // 获取存储路径，如果不存在则使用默认路径
 let targetDirectory = store.get('storagePath', DEFAULT_STORAGE_PATH)
@@ -156,18 +157,23 @@ ipcMain.handle('file:select', async () => {
 })
 
 ipcMain.handle('file:upload', async (event, filePath) => {
+  console.log('主进程收到上传请求,文件路径:', filePath)
   try {
     isCancelled = false;
     
-    // 确保目标目录存在
+    console.log('检查目标目录:', targetDirectory)
     if (!fs.existsSync(targetDirectory)) {
+      console.log('目标目录不存在,创建目录')
       fs.mkdirSync(targetDirectory, { recursive: true });
     }
 
     const fileName = path.basename(filePath);
     const targetPath = path.join(targetDirectory, fileName);
+    console.log('目标文件路径:', targetPath)
     
     const fileSize = fs.statSync(filePath).size;
+    console.log('文件大小:', fileSize)
+    
     const chunkSize = 1024 * 100;
     let uploadedSize = 0;
 
@@ -205,7 +211,7 @@ ipcMain.handle('file:upload', async (event, filePath) => {
       message: `文件已保存至: ${targetPath}` 
     };
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('主进程上传错误:', error);
     throw error;
   }
 })

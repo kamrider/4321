@@ -27,46 +27,62 @@ onUnmounted(() => {
 
 // 文件选择
 const handleFileSelect = async () => {
+  console.log('开始选择文件...')
   if (uploadStatus.value === 'uploading') {
-    await cancelUpload() // 自动取消当前上传
+    console.log('检测到正在上传,准备取消当前上传')
+    await cancelUpload()
   }
   try {
+    console.log('调用文件选择对话框...')
     const filePath = await window.ipcRenderer.uploadFile.select()
+    console.log('选择的文件路径:', filePath)
+    
     if (filePath) {
       selectedFile.value = filePath
-      // 获取预览
+      console.log('获取文件预览...')
       const preview = await window.ipcRenderer.uploadFile.getPreview(filePath)
+      console.log('预览数据:', preview)
       previewUrl.value = preview.previewUrl
     }
   } catch (error) {
-    console.error('Error selecting file:', error)
+    console.error('文件选择错误:', error)
     showError('选择文件失败，请重试！')
   }
 }
 
 // 开始上传
 const startUpload = async () => {
-  if (!selectedFile.value) return
+  console.log('开始上传流程...')
+  if (!selectedFile.value) {
+    console.log('没有选择文件,上传终止')
+    return
+  }
   
+  console.log('设置上传状态为uploading')
   uploadStatus.value = 'uploading'
   
   // 设置进度监听
   removeProgressListener = window.ipcRenderer.uploadFile.onProgress((progress) => {
+    console.log('上传进度:', progress)
     uploadProgress.value = progress.progress
 
     switch (progress.status) {
       case 'uploading':
+        console.log('文件正在上传中...')
         uploadStatus.value = 'uploading'
         break
       case 'completed':
+        console.log('上传完成')
         uploadStatus.value = 'completed'
         showError('上传成功！', true)
         break
       case 'cancelled':
+        console.log('上传已取消')
         uploadStatus.value = 'idle'
         uploadProgress.value = 0
         break
       case 'error':
+        console.log('上传出错')
         uploadStatus.value = 'error'
         showError('上传过程中出错，请重试！')
         break
@@ -74,10 +90,12 @@ const startUpload = async () => {
   })
   
   try {
+    console.log('开始调用上传方法,文件路径:', selectedFile.value)
     await window.ipcRenderer.uploadFile.start(selectedFile.value)
+    console.log('上传方法调用完成')
     uploadStatus.value = 'completed'
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('上传错误详情:', error)
     uploadStatus.value = 'error'
     showError('上传失败，请重试！')
   }

@@ -4,9 +4,14 @@ import { ref, computed, onUnmounted, onMounted } from 'vue'
 // 文件状态管理
 interface FileItem {
   path: string
+  fileId?: string        // 添加文件ID
   preview?: string
   progress: number
   status: 'idle' | 'uploading' | 'completed' | 'error'
+  uploadDate?: string
+  originalDate?: string
+  relativePath?: string  // 添加相对路径
+  hash?: string         // 添加文件哈希
 }
 
 const fileList = ref<FileItem[]>([])
@@ -82,26 +87,32 @@ const startUpload = async () => {
     const file = fileList.value.find(file => file.path === progress.filePath)
     if (file) {
       file.progress = progress.progress
-
+      
       switch (progress.status) {
         case 'uploading':
-          console.log('文件正在上传中...')
           file.status = 'uploading'
           break
+        
         case 'completed':
-          console.log('上传完成')
           file.status = 'completed'
+          if (progress.fileId) {
+            file.fileId = progress.fileId
+          }
+          if (progress.fileInfo) {
+            file.uploadDate = progress.fileInfo.uploadDate
+            file.originalDate = progress.fileInfo.originalDate
+          }
           showError('上传成功！', true)
           break
+        
+        case 'error':
+          file.status = 'error'
+          showError(progress.error || '上传过程中出错，请重试！')
+          break
+        
         case 'cancelled':
-          console.log('上传已取消')
           file.status = 'idle'
           file.progress = 0
-          break
-        case 'error':
-          console.log('上传出错')
-          file.status = 'error'
-          showError('上传过程中出错，请重试！')
           break
       }
     }
@@ -245,6 +256,14 @@ const removeFile = async (filePath: string) => {
           <img :src="file.preview" alt="Preview" />
           <div class="file-info">
             <p class="file-name">{{ file.path.split('/').pop() }}</p>
+            <template v-if="file.status === 'completed'">
+              <p class="file-date" v-if="file.uploadDate">
+                上传日期: {{ file.uploadDate }}
+              </p>
+              <p class="file-date" v-if="file.originalDate">
+                创建日期: {{ file.originalDate }}
+              </p>
+            </template>
             <p class="file-status">{{ file.status }}</p>
             <p v-if="file.error" class="error-text">{{ file.error }}</p>
           </div>
@@ -490,5 +509,11 @@ const removeFile = async (filePath: string) => {
 
 .clear-btn:hover {
   background: #555;
+}
+
+.file-date {
+  font-size: 12px;
+  color: #666;
+  margin: 4px 0;
 }
 </style>

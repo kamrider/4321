@@ -8,10 +8,14 @@ interface UploadError extends Error {
 
 interface UploadProgress {
   filePath: string
+  fileId?: string
   progress: number
-  status: 'uploading' | 'completed' | 'cancelled' | 'error'
-  targetPath?: string
+  status: 'idle' | 'uploading' | 'completed' | 'error' | 'cancelled'
   error?: string
+  fileInfo?: {
+    uploadDate: string
+    originalDate: string
+  }
 }
 
 interface UploadResult {
@@ -127,6 +131,16 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       } catch (error) {
         console.error('Error resetting storage path:', error);
         throw error;
+      }
+    },
+
+    // 获取元数据
+    getMetadata: async () => {
+      try {
+        return await ipcRenderer.invoke('file:get-metadata')
+      } catch (error) {
+        console.error('Error getting metadata:', error)
+        throw error
       }
     }
   }

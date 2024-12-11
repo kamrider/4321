@@ -5,6 +5,7 @@ import path from 'node:path'
 import os from 'node:os'
 import * as fs from 'fs'
 import Store from 'electron-store'
+import { MetadataManager } from './metadata'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -79,6 +80,9 @@ const validateFilePaths = (filePaths: string[]) => {
   })
 }
 
+// 添加元数据管理器
+const metadataManager = new MetadataManager(targetDirectory)
+
 // 上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
   try {
@@ -96,66 +100,68 @@ async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: st
     const fileSize = fs.statSync(filePath).size
     const chunkSize = fileSize > 1024 * 1024 * 10 ? 1024 * 500 : 1024 * 100
 
-    const readStream = fs.createReadStream(filePath, { highWaterMark: chunkSize })
+    // 创建写入流
     const writeStream = fs.createWriteStream(targetPath)
+    const readStream = fs.createReadStream(filePath)
+    
+    // 监听数据传输进度
+    let totalSize = fs.statSync(filePath).size
     let uploadedSize = 0
-
-    for await (const chunk of readStream) {
-      if (isAllCancelled || cancelMap[filePath]) {
-        readStream.destroy()
-        writeStream.destroy()
-        fs.unlinkSync(targetPath)
-        event.sender.send('file:progress', { 
-          filePath,
-          progress: 0, 
-          status: 'cancelled' 
-        })
-        return {
-          filePath,
-          success: false,
-          message: isAllCancelled ? 'All uploads cancelled' : 'Upload cancelled'
-        }
-      }
-
-      writeStream.write(chunk)
+    
+    readStream.on('data', (chunk) => {
       uploadedSize += chunk.length
+      const progress = Math.round((uploadedSize / totalSize) * 100)
       
-      const progress = Math.min((uploadedSize / fileSize) * 100, 100).toFixed(2)
-      event.sender.send('file:progress', { 
+      // 发送进度信息
+      event.sender.send('file:progress', {
         filePath,
-        progress: parseFloat(progress),
+        progress,
         status: 'uploading',
         targetPath
       })
-      
-      if (process.env.NODE_ENV !== 'production') {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-    }
+    })
 
-    writeStream.end()
+    // 等待文件写入完成
+    await new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve)
+      writeStream.on('error', reject)
+      readStream.pipe(writeStream)
+    })
+
+    // 添加元数据并获取文件ID
+    const fileId = await metadataManager.addFile(filePath, targetPath)
     
+    // 发送完成状态
     event.sender.send('file:progress', {
       filePath,
+      fileId,  // 确保包含 fileId
       progress: 100,
       status: 'completed',
-      targetPath
+      fileInfo: {
+        uploadDate: new Date().toISOString().split('T')[0],
+        originalDate: fs.statSync(filePath).birthtime.toISOString().split('T')[0]
+      }
     })
 
     return {
       filePath,
+      fileId,
       success: true,
       targetPath,
       message: `文件已保存至: ${targetPath}`
     }
+
   } catch (error) {
-    console.error('文件上传错误:', error)
+    console.error('上传文件失败:', error)
+    
+    // 发送错误状态
     event.sender.send('file:progress', {
       filePath,
       progress: 0,
       status: 'error',
       error: error.message
     })
+
     return {
       filePath,
       success: false,
@@ -337,6 +343,8 @@ ipcMain.handle('file:set-storage-path', async () => {
       fs.accessSync(newPath, fs.constants.W_OK);
       targetDirectory = newPath;
       store.set('storagePath', targetDirectory);
+      // 重新初始化 MetadataManager
+      metadataManager = new MetadataManager(targetDirectory)
       return targetDirectory;
     } catch (error) {
       throw new Error('选定路径不可写，请选择其他路径');
@@ -354,3 +362,8 @@ ipcMain.handle('file:reset-storage-path', () => {
   store.set('storagePath', DEFAULT_STORAGE_PATH);
   return DEFAULT_STORAGE_PATH;
 });
+
+// 添加在其他 IPC 处理程序旁边
+ipcMain.handle('file:get-metadata', () => {
+  return metadataManager.getMetadata()
+})

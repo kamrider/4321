@@ -64,6 +64,106 @@ try {
   store.set('storagePath', DEFAULT_STORAGE_PATH)
 }
 
+// 添加全局取消标志和取消映射
+let isAllCancelled = false
+const cancelMap: { [key: string]: boolean } = {}
+
+// 验证文件路径
+const validateFilePaths = (filePaths: string[]) => {
+  return filePaths.filter(filePath => {
+    try {
+      return fs.existsSync(filePath) && fs.statSync(filePath).isFile()
+    } catch {
+      return false
+    }
+  })
+}
+
+// 上传单个文件的函数
+async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
+  try {
+    // 检查全局取消状态
+    if (isAllCancelled || cancelMap[filePath]) {
+      return {
+        filePath,
+        success: false,
+        message: isAllCancelled ? 'All uploads cancelled' : 'Upload cancelled'
+      }
+    }
+
+    const fileName = path.basename(filePath)
+    const targetPath = path.join(targetDirectory, fileName)
+    const fileSize = fs.statSync(filePath).size
+    const chunkSize = fileSize > 1024 * 1024 * 10 ? 1024 * 500 : 1024 * 100
+
+    const readStream = fs.createReadStream(filePath, { highWaterMark: chunkSize })
+    const writeStream = fs.createWriteStream(targetPath)
+    let uploadedSize = 0
+
+    for await (const chunk of readStream) {
+      if (isAllCancelled || cancelMap[filePath]) {
+        readStream.destroy()
+        writeStream.destroy()
+        fs.unlinkSync(targetPath)
+        event.sender.send('file:progress', { 
+          filePath,
+          progress: 0, 
+          status: 'cancelled' 
+        })
+        return {
+          filePath,
+          success: false,
+          message: isAllCancelled ? 'All uploads cancelled' : 'Upload cancelled'
+        }
+      }
+
+      writeStream.write(chunk)
+      uploadedSize += chunk.length
+      
+      const progress = Math.min((uploadedSize / fileSize) * 100, 100).toFixed(2)
+      event.sender.send('file:progress', { 
+        filePath,
+        progress: parseFloat(progress),
+        status: 'uploading',
+        targetPath
+      })
+      
+      if (process.env.NODE_ENV !== 'production') {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+
+    writeStream.end()
+    
+    event.sender.send('file:progress', {
+      filePath,
+      progress: 100,
+      status: 'completed',
+      targetPath
+    })
+
+    return {
+      filePath,
+      success: true,
+      targetPath,
+      message: `文件已保存至: ${targetPath}`
+    }
+  } catch (error) {
+    console.error('文件上传错误:', error)
+    event.sender.send('file:progress', {
+      filePath,
+      progress: 0,
+      status: 'error',
+      error: error.message
+    })
+    return {
+      filePath,
+      success: false,
+      error: error.message
+    }
+  }
+}
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Main window',
@@ -156,69 +256,48 @@ ipcMain.handle('file:select', async () => {
   return result.filePaths[0];
 })
 
-ipcMain.handle('file:upload', async (event, filePath) => {
-  console.log('主进程收到上传请求,文件路径:', filePath)
-  try {
-    isCancelled = false;
-    
-    console.log('检查目标目录:', targetDirectory)
-    if (!fs.existsSync(targetDirectory)) {
-      console.log('目标目录不存在,创建目录')
-      fs.mkdirSync(targetDirectory, { recursive: true });
-    }
+// 修改主上传处理器
+ipcMain.handle('file:upload', async (event, filePaths) => {
+  console.log('主进程收到上传请求,文件路径:', filePaths)
+  const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
+  
+  const validPaths = validateFilePaths(paths)
+  if (validPaths.length === 0) {
+    return { success: false, message: '没有有效的文件可上传' }
+  }
 
-    const fileName = path.basename(filePath);
-    const targetPath = path.join(targetDirectory, fileName);
-    console.log('目标文件路径:', targetPath)
-    
-    const fileSize = fs.statSync(filePath).size;
-    console.log('文件大小:', fileSize)
-    
-    const chunkSize = 1024 * 100;
-    let uploadedSize = 0;
+  // 重置取消状态
+  isAllCancelled = false
+  validPaths.forEach(path => cancelMap[path] = false)
+  
+  const results = await Promise.all(
+    validPaths.map(path => uploadSingleFile(event, path))
+  )
 
-    const readStream = fs.createReadStream(filePath, { highWaterMark: chunkSize });
-    const writeStream = fs.createWriteStream(targetPath);
+  const failedFiles = results.filter(result => !result.success)
+  if (failedFiles.length > 0) {
+    console.warn('以下文件上传失败:', failedFiles.map(file => file.filePath))
+  }
 
-    for await (const chunk of readStream) {
-      if (isCancelled) {
-        readStream.destroy();
-        writeStream.destroy();
-        fs.unlinkSync(targetPath); // 删除未完成的文件
-        event.sender.send('file:progress', { progress: 0, status: 'cancelled' });
-        return { success: false, message: 'Upload cancelled' };
-      }
-
-      writeStream.write(chunk);
-      uploadedSize += chunk.length;
-      
-      const progress = Math.min((uploadedSize / fileSize) * 100, 100).toFixed(2);
-      event.sender.send('file:progress', { 
-        progress: parseFloat(progress), 
-        status: 'uploading',
-        targetPath 
-      });
-      
-      // 模拟网络延迟
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    writeStream.end();
-    
-    return { 
-      success: true, 
-      targetPath,
-      message: `文件已保存至: ${targetPath}` 
-    };
-  } catch (error) {
-    console.error('主进程上传错误:', error);
-    throw error;
+  return { 
+    results, 
+    success: failedFiles.length === 0,
+    message: failedFiles.length > 0 
+      ? `${failedFiles.length} 个文件上传失败` 
+      : '所有文件上传成功'
   }
 })
 
-ipcMain.handle('file:cancel', () => {
-  isCancelled = true;
-  return { cancelled: true };
+// 修改取消处理器
+ipcMain.handle('file:cancel', async (event, filePath) => {
+  if (filePath) {
+    cancelMap[filePath] = true
+    return { success: true, filePath }
+  } else {
+    isAllCancelled = true
+    Object.keys(cancelMap).forEach(path => cancelMap[path] = true)
+    return { success: true, message: '已取消所有上传' }
+  }
 })
 
 ipcMain.handle('file:preview', async (event, filePath) => {

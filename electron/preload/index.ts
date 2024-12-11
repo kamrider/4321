@@ -1,5 +1,30 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+// 添加在文件开头的类型定义
+interface UploadError extends Error {
+  code?: string
+  path?: string
+}
+
+interface UploadProgress {
+  filePath: string
+  progress: number
+  status: 'uploading' | 'completed' | 'cancelled' | 'error'
+  targetPath?: string
+  error?: string
+}
+
+interface UploadResult {
+  success: boolean
+  results?: Array<{
+    filePath: string
+    success: boolean
+    targetPath?: string
+    error?: string
+  }>
+  message?: string
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
@@ -32,28 +57,36 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     },
     
     // 开始上传文件
-    start: (filePath: string) => {
-      if (!filePath || typeof filePath !== 'string') {
-        throw new Error('Invalid filePath provided for upload.');
+    start: (filePaths: string | string[]) => {
+      const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
+      
+      if (paths.length === 0) {
+        throw new Error('没有提供要上传的文件')
       }
-      return ipcRenderer.invoke('file:upload', filePath);
+      
+      const invalidPaths = paths.filter(path => !validatePath(path))
+      if (invalidPaths.length > 0) {
+        throw new Error(`以下文件路径无效: ${invalidPaths.join(', ')}`)
+      }
+      
+      return ipcRenderer.invoke('file:upload', paths)
     },
     
     // 获取上传进度
     onProgress: (callback: (progress: UploadProgress) => void) => {
-      const listener = (_event, progress) => callback(progress);
-      ipcRenderer.on('file:progress', listener);
-      return () => ipcRenderer.removeListener('file:progress', listener);
+      const listener = (_event: any, progress: UploadProgress) => callback(progress)
+      ipcRenderer.on('file:progress', listener)
+      return () => ipcRenderer.removeListener('file:progress', listener)
     },
     
     // 取消上传
-    cancel: async () => {
+    cancel: async (filePath?: string) => {
       try {
-        const result = await ipcRenderer.invoke('file:cancel');
-        return { success: true, result };
+        const result = await ipcRenderer.invoke('file:cancel', filePath)
+        return { success: true, result }
       } catch (error) {
-        console.error('Error canceling upload:', error);
-        return { success: false, error };
+        console.error('Error canceling upload:', error)
+        return { success: false, error }
       }
     },
     
@@ -195,3 +228,10 @@ window.onmessage = (ev) => {
 }
 
 setTimeout(removeLoading, 4999)
+
+// 文件路径验证函数
+const validatePath = (path: string): boolean => {
+  if (!path || typeof path !== 'string') return false
+  // Windows 路径或 Unix 路径
+  return path.match(/^([a-zA-Z]:\\|\/)/i) !== null
+}

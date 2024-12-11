@@ -86,16 +86,20 @@ const startUpload = async () => {
     console.log('上传进度:', progress)
     const file = fileList.value.find(file => file.path === progress.filePath)
     if (file) {
-      file.progress = progress.progress
+      file.progress = progress.progress || 0
       
       switch (progress.status) {
         case 'uploading':
+          console.log('文件正在上传中...')
           file.status = 'uploading'
           break
         
         case 'completed':
+          console.log('上传完成')
           file.status = 'completed'
+          // 确保 fileId 存在再设置
           if (progress.fileId) {
+            console.log('设置文件ID:', progress.fileId)
             file.fileId = progress.fileId
           }
           if (progress.fileInfo) {
@@ -106,15 +110,23 @@ const startUpload = async () => {
           break
         
         case 'error':
+          console.log('上传出错')
           file.status = 'error'
+          file.progress = 0
           showError(progress.error || '上传过程中出错，请重试！')
           break
         
         case 'cancelled':
+          console.log('上传已取消')
           file.status = 'idle'
           file.progress = 0
           break
+        
+        default:
+          console.warn('未知的上传状态:', progress.status)
       }
+    } else {
+      console.warn('找不到对应的文件:', progress.filePath)
     }
   })
   
@@ -258,7 +270,7 @@ const removeFile = async (filePath: string) => {
             <p class="file-name">{{ file.path.split('/').pop() }}</p>
             <template v-if="file.status === 'completed'">
               <p class="file-date" v-if="file.uploadDate">
-                上传日期: {{ file.uploadDate }}
+                上传���期: {{ file.uploadDate }}
               </p>
               <p class="file-date" v-if="file.originalDate">
                 创建日期: {{ file.originalDate }}

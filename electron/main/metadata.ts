@@ -13,12 +13,95 @@ export class MetadataManager {
   constructor(storageDir: string) {
     this.baseDir = storageDir
     this.metadataPath = path.join(storageDir, METADATA_FILE)
-    this.metadata = {
-      version: '1.0',
-      baseDir: storageDir,
+    this.metadata = this.createDefaultStore(storageDir)
+    this.loadMetadata()
+  }
+
+  private createDefaultStore(baseDir: string): MetadataStore {
+    return {
+      version: '1.1',
+      baseDir,
       files: {}
     }
-    this.loadMetadata()
+  }
+
+  private createDefaultMetadata(
+    originalPath: string, 
+    targetPath: string, 
+    stats: fs.Stats, 
+    hash: string
+  ): FileMetadata {
+    const now = new Date()
+    const defaultTrainingInterval = 1
+    const nextTrainingDate = new Date(now)
+    nextTrainingDate.setDate(now.getDate() + defaultTrainingInterval)
+
+    return {
+      id: uuidv4(),
+      relativePath: path.relative(this.baseDir, targetPath),
+      originalFileName: path.basename(originalPath),
+      uploadDate: now.toISOString(),
+      originalDate: stats.birthtime.toISOString(),
+      fileSize: stats.size,
+      lastModified: stats.mtime.toISOString(),
+      hash,
+      proficiency: 0,
+      trainingInterval: defaultTrainingInterval,
+      lastTrainingDate: now.toISOString(),
+      nextTrainingDate: nextTrainingDate.toISOString(),
+      subject: '',
+      tags: ['未分类']
+    }
+  }
+
+  async addFile(originalPath: string, targetPath: string): Promise<string | null> {
+    try {
+      if (!fs.existsSync(originalPath)) {
+        throw new Error(`原始文件不存在: ${originalPath}`)
+      }
+
+      const fileStats = fs.statSync(originalPath)
+      const hash = await this.calculateFileHash(originalPath)
+      const metadata = this.createDefaultMetadata(originalPath, targetPath, fileStats, hash)
+      
+      this.metadata.files[metadata.id] = metadata
+      await this.saveMetadata()
+      
+      return metadata.id
+
+    } catch (error) {
+      console.error(`添加文件失败 (${originalPath}):`, error)
+      return null
+    }
+  }
+
+  private async upgradeMetadata() {
+    try {
+      if (this.metadata.version === '1.0') {
+        console.log('开始升级元数据从 1.0 到 1.1...')
+        for (const [id, file] of Object.entries(this.metadata.files)) {
+          if (!file.proficiency) {
+            const now = new Date()
+            const nextDate = new Date(now)
+            nextDate.setDate(now.getDate() + 1)
+
+            Object.assign(file, {
+              proficiency: 0,
+              trainingInterval: 1,
+              lastTrainingDate: file.uploadDate,
+              nextTrainingDate: nextDate.toISOString(),
+              subject: '',
+              tags: ['未分类']
+            })
+          }
+        }
+        this.metadata.version = '1.1'
+        await this.saveMetadata()
+        console.log('元数据升级完成')
+      }
+    } catch (error) {
+      console.error(`升级元数据失败 (版本 ${this.metadata.version}):`, error)
+    }
   }
 
   private loadMetadata() {
@@ -38,29 +121,6 @@ export class MetadataManager {
         files: {}
       }
     }
-  }
-
-  async addFile(originalPath: string, targetPath: string) {
-    const id = uuidv4()
-    const relativePath = path.relative(this.baseDir, targetPath)
-    const fileStats = fs.statSync(originalPath)
-    
-    // 计算文件哈希
-    const hash = await this.calculateFileHash(originalPath)
-    
-    this.metadata.files[id] = {
-      id,
-      relativePath,
-      originalFileName: path.basename(originalPath),
-      uploadDate: new Date().toISOString(),
-      originalDate: fileStats.birthtime.toISOString(),
-      fileSize: fileStats.size,
-      lastModified: fileStats.mtime.toISOString(),
-      hash
-    }
-    
-    this.saveMetadata()
-    return id
   }
 
   private async calculateFileHash(filePath: string): Promise<string> {

@@ -165,11 +165,16 @@ export class MetadataManager {
   async migrateStorage(newPath: string): Promise<{ success: boolean; errors: string[] }> {
     const errors: string[] = []
     const oldPath = this.baseDir
+    const oldMetadataPath = this.metadataPath
 
     try {
       await fs.promises.mkdir(newPath, { recursive: true })
       
-      // 开始迁移
+      // 先复制元数据文件到新路径
+      const newMetadataPath = path.join(newPath, METADATA_FILE)
+      await fs.promises.copyFile(oldMetadataPath, newMetadataPath)
+      
+      // 开始迁移文件
       for (const [id, metadata] of Object.entries(this.metadata.files)) {
         const oldFilePath = path.join(oldPath, metadata.relativePath)
         const newFilePath = path.join(newPath, metadata.relativePath)
@@ -194,15 +199,26 @@ export class MetadataManager {
       }
 
       if (errors.length === 0) {
-        // 更新元数据
+        // 更新实例变量
         this.baseDir = newPath
-        this.metadataPath = path.join(newPath, 'metadata.json')
+        this.metadataPath = newMetadataPath
         this.metadata.baseDir = newPath
         await this.saveMetadata()
+        
+        // 删除旧的元数据文件
+        await fs.promises.unlink(oldMetadataPath)
+      } else {
+        // 如果有错误，删除新的元数据文件
+        await fs.promises.unlink(newMetadataPath)
       }
 
       return { success: errors.length === 0, errors }
     } catch (error) {
+      // 如果发生错误，确保删除新的元数据文件
+      const newMetadataPath = path.join(newPath, METADATA_FILE)
+      if (fs.existsSync(newMetadataPath)) {
+        await fs.promises.unlink(newMetadataPath)
+      }
       return { success: false, errors: [...errors, error.message] }
     }
   }

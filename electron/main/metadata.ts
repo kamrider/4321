@@ -161,4 +161,49 @@ export class MetadataManager {
     this.metadata.files = validFiles
     this.saveMetadata()
   }
+
+  async migrateStorage(newPath: string): Promise<{ success: boolean; errors: string[] }> {
+    const errors: string[] = []
+    const oldPath = this.baseDir
+
+    try {
+      await fs.promises.mkdir(newPath, { recursive: true })
+      
+      // 开始迁移
+      for (const [id, metadata] of Object.entries(this.metadata.files)) {
+        const oldFilePath = path.join(oldPath, metadata.relativePath)
+        const newFilePath = path.join(newPath, metadata.relativePath)
+        
+        try {
+          await fs.promises.mkdir(path.dirname(newFilePath), { recursive: true })
+          await fs.promises.copyFile(oldFilePath, newFilePath)
+          
+          // 验证新文件
+          const oldHash = await this.calculateFileHash(oldFilePath)
+          const newHash = await this.calculateFileHash(newFilePath)
+          
+          if (oldHash === newHash) {
+            // 迁移成功，删除旧文件
+            await fs.promises.unlink(oldFilePath)
+          } else {
+            throw new Error('文件验证失败')
+          }
+        } catch (error) {
+          errors.push(`文件 ${metadata.originalFileName} 迁移失败: ${error.message}`)
+        }
+      }
+
+      if (errors.length === 0) {
+        // 更新元数据
+        this.baseDir = newPath
+        this.metadataPath = path.join(newPath, 'metadata.json')
+        this.metadata.baseDir = newPath
+        await this.saveMetadata()
+      }
+
+      return { success: errors.length === 0, errors }
+    } catch (error) {
+      return { success: false, errors: [...errors, error.message] }
+    }
+  }
 } 

@@ -21,6 +21,11 @@ interface FileMetadata {
 interface MetadataStore {
   version: string             // 元数据版本号，便于后续升级
   baseDir: string            // 基础目录，用于相对路径解析
+  migrationStatus?: {
+    inProgress: boolean
+    lastMigration: string
+    failedFiles: string[]
+  }
   files: {
     [id: string]: FileMetadata
   }

@@ -330,27 +330,38 @@ ipcMain.handle('file:get-storage-path', () => {
 })
 
 // 添加设置存储目录的处理程序
-ipcMain.handle('file:set-storage-path', async () => {
+ipcMain.handle('file:set-storage-path', async (event) => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
     title: '选择文件存储位置'
-  });
+  })
 
   if (!result.canceled && result.filePaths.length > 0) {
-    const newPath = result.filePaths[0];
+    const newPath = result.filePaths[0]
     try {
       // 验证路径是否可写
-      fs.accessSync(newPath, fs.constants.W_OK);
-      targetDirectory = newPath;
-      store.set('storagePath', targetDirectory);
-      // 重新初始化 MetadataManager
-      metadataManager = new MetadataManager(targetDirectory)
-      return targetDirectory;
+      await fs.promises.access(newPath, fs.constants.W_OK)
+      
+      // 开始迁移
+      const migrationResult = await metadataManager.migrateStorage(newPath)
+      
+      if (!migrationResult.success) {
+        event.sender.send('file:error', {
+          type: 'migration',
+          errors: migrationResult.errors
+        })
+        throw new Error('迁移失败：' + migrationResult.errors.join('\n'))
+      }
+      
+      targetDirectory = newPath
+      store.set('storagePath', targetDirectory)
+      return { success: true, path: targetDirectory }
+      
     } catch (error) {
-      throw new Error('选定路径不可写，请选择其他路径');
+      throw new Error(`设置存储路径失败: ${error.message}`)
     }
   }
-  return null;
+  return { success: false, message: '未选择新路径' }
 })
 
 // 添加重置存储目录的处理程序

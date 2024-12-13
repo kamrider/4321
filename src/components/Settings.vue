@@ -1,163 +1,113 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-
-const storagePath = ref<string>('')
-const message = ref<string | null>(null)
-const isError = ref(false)
-
-onMounted(async () => {
-  try {
-    const path = await window.ipcRenderer.uploadFile.getStoragePath()
-    storagePath.value = path || '（未设置存储路径）'
-  } catch (error) {
-    console.error('Error getting storage path:', error)
-    showMessage('获取存储路径失败', true)
-  }
-})
-
-const handleChangeStoragePath = async () => {
-  try {
-    const newPath = await window.ipcRenderer.uploadFile.setStoragePath()
-    if (newPath) {
-      storagePath.value = newPath
-      showMessage('存储路径修改成功！')
-    }
-  } catch (error) {
-    console.error('Error changing storage path:', error)
-    showMessage('修改存储路径失败，请重试！', true)
-  }
-}
-
-const resetStoragePath = async () => {
-  try {
-    const defaultPath = await window.ipcRenderer.uploadFile.resetStoragePath()
-    storagePath.value = defaultPath
-    showMessage('已重置到默认存储路径！')
-  } catch (error) {
-    console.error('Error resetting storage path:', error)
-    showMessage('重置失败，请重试！', true)
-  }
-}
-
-const showMessage = (msg: string, error = false) => {
-  message.value = msg
-  isError.value = error
-  setTimeout(() => {
-    message.value = null
-  }, 3000)
-}
-</script>
-
 <template>
-  <div class="settings-container">
-    <h2>系统设置</h2>
-    
-    <div class="message" v-if="message" :class="{ error: isError }">
-      {{ message }}
-    </div>
-
-    <div class="setting-item">
-      <h3>文件存储位置</h3>
-      <div class="storage-path">
-        <div class="path-display">
-          <span class="label">当前路径：</span>
-          <span class="path">{{ storagePath }}</span>
+  <div class="settings-wrapper">
+    <div class="settings-content">
+      <el-card class="settings-card">
+        <template #header>
+          <div class="card-header">
+            <span>存储设置</span>
+          </div>
+        </template>
+        
+        <div class="storage-path">
+          <span class="label">当前存储路径：</span>
+          <el-input
+            v-model="storagePath"
+            readonly
+            :placeholder="storagePath || '未设置存储路径'"
+          >
+            <template #append>
+              <el-button @click="handleSetStoragePath">
+                <el-icon><Folder /></el-icon>
+                选择路径
+              </el-button>
+            </template>
+          </el-input>
         </div>
-        <div class="buttons">
-          <button @click="handleChangeStoragePath" class="primary-btn">修改路径</button>
-          <button @click="resetStoragePath" class="reset-btn">重置默认</button>
-        </div>
-      </div>
+      </el-card>
     </div>
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { Folder } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+
+const storagePath = ref('')
+
+onMounted(async () => {
+  try {
+    storagePath.value = await window.ipcRenderer.uploadFile.getStoragePath()
+  } catch (error) {
+    console.error('获取存储路径失败:', error)
+  }
+})
+
+const handleSetStoragePath = async () => {
+  try {
+    const result = await window.ipcRenderer.uploadFile.setStoragePath()
+    if (result.success) {
+      storagePath.value = result.path
+      ElMessage.success('存储路径设置成功')
+    }
+  } catch (error) {
+    console.error('设置存储路径失败:', error)
+    ElMessage.error('设置存储路径失败')
+  }
+}
+</script>
+
 <style scoped>
-.settings-container {
-  padding: 20px;
-  max-width: 800px;
-  margin: 0 auto;
+.settings-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
 }
 
-.message {
-  padding: 10px 16px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  background: #4caf50;
-  color: white;
-  animation: fade-in 0.3s ease-out;
+.settings-content {
+  width: 100%;
+  max-width: 600px;
 }
 
-.message.error {
-  background: #ff4444;
-}
-
-.setting-item {
-  background: white;
-  padding: 20px;
+.settings-card {
+  background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 
-.setting-item h3 {
-  margin-top: 0;
-  margin-bottom: 16px;
-  color: #2c3e50;
+.card-header {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .storage-path {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
-.path-display {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 4px;
-  word-break: break-all;
-}
-
-.path-display .label {
-  color: #666;
-  margin-right: 8px;
-}
-
-.buttons {
-  display: flex;
-  gap: 12px;
-}
-
-button {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.label {
   font-size: 14px;
+  color: var(--el-text-color-regular);
+  margin-bottom: 8px;
 }
 
-.primary-btn {
-  background: #2c3e50;
-  color: white;
+:deep(.el-input-group__append) {
+  padding: 0;
 }
 
-.primary-btn:hover {
-  background: #34495e;
+:deep(.el-input-group__append button) {
+  border: none;
+  height: 100%;
+  padding: 0 20px;
+  font-size: 14px;
+  min-width: 120px;
 }
 
-.reset-btn {
-  background: #95a5a6;
-  color: white;
-}
-
-.reset-btn:hover {
-  background: #7f8c8d;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+:deep(.el-icon) {
+  margin-right: 8px;
+  font-size: 16px;
 }
 </style> 

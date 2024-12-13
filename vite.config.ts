@@ -2,6 +2,9 @@ import fs from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
+import Components from 'unplugin-vue-components/vite'
+import AutoImport from 'unplugin-auto-import/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import pkg from './package.json'
 
 // https://vitejs.dev/config/
@@ -15,6 +18,15 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [
       vue(),
+      Components({
+        resolvers: [ElementPlusResolver()],
+        dts: true,
+      }),
+      AutoImport({
+        resolvers: [ElementPlusResolver()],
+        imports: ['vue', 'vue-router'],
+        dts: 'src/auto-imports.d.ts',
+      }),
       electron({
         main: {
           // Shortcut of `build.lib.entry`
@@ -62,6 +74,13 @@ export default defineConfig(({ command }) => {
         renderer: {},
       }),
     ],
+    css: {
+      preprocessorOptions: {
+        scss: {
+          additionalData: `@use "element-plus/theme-chalk/src/index.scss" as *;`,
+        },
+      },
+    },
     server: process.env.VSCODE_DEBUG && (() => {
       const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
       return {

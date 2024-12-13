@@ -1,165 +1,105 @@
+<template>
+  <el-menu
+    class="sidebar-menu"
+    :default-active="activeRoute"
+    :collapse="isCollapse"
+    @select="handleSelect"
+    background-color="#f5f7fa"
+    text-color="#303133"
+    active-text-color="#409EFF"
+  >
+    <el-menu-item index="/upload">
+      <el-icon><Upload /></el-icon>
+      <template #title>上传图片</template>
+    </el-menu-item>
+
+    <el-menu-item index="/mistake">
+      <el-icon><DocumentCopy /></el-icon>
+      <template #title>我的错题</template>
+    </el-menu-item>
+
+    <el-menu-item index="/history">
+      <el-icon><Notebook /></el-icon>
+      <template #title>训练内容</template>
+    </el-menu-item>
+
+    <el-menu-item index="/settings">
+      <el-icon><Setting /></el-icon>
+      <template #title>设置</template>
+    </el-menu-item>
+  </el-menu>
+</template>
+
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { Upload, DocumentCopy, Notebook, Setting } from '@element-plus/icons-vue'
 
-const emit = defineEmits(['menu-click'])
+const router = useRouter()
+const route = useRoute()
 
-const isCollapsed = ref(false)
+// 控制菜单折叠
+const isCollapse = ref(false)
 
-const menuItems = [
-  { 
-    icon: '📝', 
-    label: '上传错题', 
-    route: '/upload' 
-  },
-  { 
-    icon: '📚', 
-    label: '我的错题', 
-    route: '/mistakes' 
-  },
-  { 
-    icon: '📖', 
-    label: '训练内容', 
-    route: '/training' 
-  },
-  { 
-    icon: '⚙️', 
-    label: '设置', 
-    route: '/settings' 
-  }
-]
+// 当前激活的路由
+const activeRoute = computed(() => route.path)
 
-const handleMenuClick = (route: string) => {
-  emit('menu-click', route)
-}
-
-const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value
+// 处理菜单选择
+const handleSelect = (index: string) => {
+  router.push(index)
 }
 </script>
 
-<template>
-  <div class="sidebar" :class="{ 'collapsed': isCollapsed }">
-    <div class="menu-items">
-      <router-link
-        v-for="item in menuItems"
-        :key="item.label"
-        :to="item.route"
-        class="menu-item"
-        :title="isCollapsed ? item.label : ''"
-        active-class="active"
-      >
-        <span class="icon">{{ item.icon }}</span>
-        <span class="label" v-show="!isCollapsed">{{ item.label }}</span>
-      </router-link>
-    </div>
-    
-    <div class="toggle-btn" @click="toggleSidebar">
-      {{ isCollapsed ? '→' : '←' }}
-    </div>
-  </div>
-</template>
-
 <style scoped>
-.sidebar {
-  background: #2c3e50;
-  color: white;
+.sidebar-menu {
   height: 100vh;
-  width: 240px;
-  transition: all 0.3s ease;
+  border-right: 1px solid #e6e6e6;
   position: fixed;
   left: 0;
   top: 0;
-  display: flex;
-  flex-direction: column;
+  bottom: 0;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 
-.collapsed {
-  width: 60px;
+.sidebar-menu:not(.el-menu--collapse) {
+  width: 200px;
 }
 
-.toggle-btn {
-  position: absolute;
-  right: -30px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #2c3e50;
-  color: white;
-  width: 30px;
-  height: 60px;
-  border-radius: 0 8px 8px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
+/* 适配窗口大小变化 */
+@media (max-width: 768px) {
+  .sidebar-menu:not(.el-menu--collapse) {
+    width: 64px;
+  }
+}
+
+/* 自定义菜单样式 */
+:deep(.el-menu-item) {
+  height: 56px;
+  line-height: 56px;
+  padding: 0 20px !important;
+}
+
+:deep(.el-menu-item.is-active) {
+  background-color: #e6f0fc !important;
+  border-right: 2px solid #409EFF;
+  color: #409EFF !important;
+}
+
+:deep(.el-menu-item:hover) {
+  background-color: #eef5fc !important;
+  color: #409EFF !important;
+}
+
+/* 图标样式 */
+:deep(.el-icon) {
   font-size: 18px;
+  vertical-align: middle;
+  margin-right: 5px;
+  color: inherit;
 }
 
-.toggle-btn:hover {
-  background: #34495e;
-  width: 35px;
-  right: -35px;
-}
-
-.menu-items {
-  padding: 20px 0;
-  flex: 1;
-}
-
-.menu-item {
-  padding: 15px 20px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.menu-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 3px;
-  background: transparent;
-  transition: all 0.3s ease;
-}
-
-.menu-item:hover {
-  background: #34495e;
-}
-
-.menu-item:hover::before {
-  background: #42b883;
-}
-
-.icon {
-  font-size: 24px;
-  margin-right: 15px;
-  transition: all 0.3s ease;
-}
-
-.menu-item:hover .icon {
-  transform: scale(1.1);
-}
-
-.label {
-  font-size: 16px;
-  white-space: nowrap;
-  opacity: 1;
-  transition: all 0.3s ease;
-}
-
-.collapsed .label {
-  opacity: 0;
-}
-
-.active {
-  background: #34495e;
-}
-
-.active .icon {
-  color: #42b983;
+/* 确保内容不会被遮挡 */
+:deep(.el-menu--collapse) {
+  width: 64px;
 }
 </style> 

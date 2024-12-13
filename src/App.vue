@@ -13,7 +13,9 @@ const handleMenuClick = (route: string) => {
   <div class="app-container">
     <Sidebar @menu-click="handleMenuClick" />
     <div class="main-content">
-      <router-view></router-view>
+      <div class="content-wrapper">
+        <router-view></router-view>
+      </div>
     </div>
   </div>
 </template>
@@ -22,13 +24,28 @@ const handleMenuClick = (route: string) => {
 .app-container {
   display: flex;
   min-height: 100vh;
-  background-color: #f5f5f5;
 }
 
 .main-content {
-  margin-left: 240px;
-  flex: 1;
-  transition: all 0.3s ease;
-  padding: 20px;
+  position: fixed;
+  top: 2%;
+  right: 2%;
+  bottom: 2%;
+  left: calc(200px + 2%);
+  background-color: #f5f7fa;
+  overflow-y: auto;
+  padding: 2%;
+}
+
+/* 响应式布局 - 当侧边栏折叠时 */
+@media (max-width: 768px) {
+  .main-content {
+    left: calc(64px + 2%);
+  }
+}
+
+.content-wrapper {
+  height: 100%;
+  width: 100%;
 }
 </style>

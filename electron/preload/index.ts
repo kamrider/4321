@@ -29,6 +29,34 @@ interface UploadResult {
   message?: string
 }
 
+// 在已有的接口定义后添加新的接口
+interface MistakeItem {
+  fileId: string
+  path: string
+  preview: string
+  uploadDate: string
+  originalDate: string
+  originalFileName: string
+  fileSize: number
+  lastModified: string
+  hash?: string
+  metadata: {
+    proficiency: number
+    trainingInterval: number
+    lastTrainingDate: string
+    nextTrainingDate: string
+    subject: string
+    tags: string[]
+    notes: string
+  }
+}
+
+interface MistakeListResult {
+  success: boolean
+  data: MistakeItem[]
+  error?: string
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
@@ -142,11 +170,20 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
         console.error('Error getting metadata:', error)
         throw error
       }
-    }
-  }
+    },
+  },
 
   // You can expose other APTs you need here.
   // ...
+  // 获取错题列表
+  getMistakes: async (): Promise<MistakeListResult> => {
+    try {
+      return await ipcRenderer.invoke('file:get-mistakes')
+        } catch (error) {
+          console.error('Error getting mistakes:', error)
+          throw error
+        }
+      }
 })
 
 // --------- Preload scripts loading ---------

@@ -222,4 +222,10 @@ export class MetadataManager {
       return { success: false, errors: [...errors, error.message] }
     }
   }
+
+  async getMetadata(): Promise<MetadataStore> {
+    // 在返回之前验证一下元数据
+    this.validateMetadata()
+    return this.metadata
+  }
 } 

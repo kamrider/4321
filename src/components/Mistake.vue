@@ -7,26 +7,36 @@ interface MistakeItem {
   preview: string
   uploadDate: string
   originalDate: string
+  originalFileName: string
+  fileSize: number
+  lastModified: string
+  hash?: string
+  metadata: {
+    proficiency: number
+    trainingInterval: number
+    lastTrainingDate: string
+    nextTrainingDate: string
+    subject: string
+    tags: string[]
+    notes: string
+  }
 }
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
+const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    // 获取存储路径和元数据
-    const metadata = await window.ipcRenderer.uploadFile.getMetadata()
-    
-    // 转换元数据为展示格式
-    mistakeList.value = metadata.files.map(file => ({
-      fileId: file.fileId,
-      path: file.path,
-      preview: file.previewUrl,
-      uploadDate: file.uploadDate,
-      originalDate: file.originalDate
-    }))
+    const result = await window.ipcRenderer.getMistakes()
+    if (result.success) {
+      mistakeList.value = result.data
+    } else {
+      error.value = result.error || '加载错题失败'
+    }
   } catch (error) {
     console.error('加载错题失败:', error)
+    error.value = '加载错题失败'
   } finally {
     loading.value = false
   }

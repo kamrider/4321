@@ -378,3 +378,73 @@ ipcMain.handle('file:reset-storage-path', () => {
 ipcMain.handle('file:get-metadata', () => {
   return metadataManager.getMetadata()
 })
+
+
+ipcMain.handle('file:get-mistakes', async () => {
+  try {
+    // 检查存储路径是否存在
+    if (!fs.existsSync(targetDirectory)) {
+      return {
+        success: false,
+        data: [],
+        error: '存储路径不存在'
+      };
+    }
+
+    // 从元数据管理器获取所有文件信息
+    const metadata = await metadataManager.getMetadata();
+
+    // 使用 Object.entries() 获取文件的键值对，并进行处理
+    const mistakes = await Promise.all(
+      Object.entries(metadata.files).map(async ([id, file]) => {
+        try {
+          const filePath = path.join(targetDirectory, file.relativePath);
+
+          // 读取文件并转换为 Base64 数据
+          const fileData = await fs.promises.readFile(filePath);
+          const fileExtension = path.extname(filePath).toLowerCase().slice(1);
+          const base64Data = fileData.toString('base64');
+
+          return {
+            fileId: id,
+            path: filePath,
+            preview: `data:image/${fileExtension};base64,${base64Data}`,
+            uploadDate: file.uploadDate,
+            originalDate: file.originalDate,
+            originalFileName: file.originalFileName,
+            fileSize: file.fileSize,
+            lastModified: file.lastModified,
+            hash: file.hash,
+            metadata: {
+              proficiency: file.proficiency,
+              trainingInterval: file.trainingInterval,
+              lastTrainingDate: file.lastTrainingDate,
+              nextTrainingDate: file.nextTrainingDate,
+              subject: file.subject || '',
+              tags: file.tags || [],
+              notes: file.notes || ''
+            }
+          };
+        } catch (error) {
+          console.error(`处理文件 ${id} 失败:`, error);
+          return null;
+        }
+      })
+    );
+
+    // 过滤掉处理失败的项
+    const validMistakes = mistakes.filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return {
+      success: true,
+      data: validMistakes
+    };
+  } catch (error) {
+    console.error('获取错题列表失败:', error);
+    return {
+      success: false,
+      data: [],
+      error: error.message
+    };
+  }
+});

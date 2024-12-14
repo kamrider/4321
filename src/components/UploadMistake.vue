@@ -231,11 +231,13 @@ const addFileToList = async (filePath: string) => {
   }
 }
 
-// 清理已完成的文件
-const clearCompletedFiles = () => {
-  fileList.value = fileList.value.filter(
-    file => file.status !== 'completed' && file.status !== 'error'
-  )
+// 清空所有文件
+const clearAllFiles = () => {
+  // 如果有正在上传的文件，先取消上传
+  if (hasUploadingFiles.value) {
+    cancelUpload()
+  }
+  fileList.value = []
 }
 
 // 移除单个文件
@@ -245,6 +247,23 @@ const removeFile = async (filePath: string) => {
     await cancelUpload(filePath)
   }
   fileList.value = fileList.value.filter(f => f.path !== filePath)
+}
+
+// 添加日期格式化函数
+const formatDate = (dateStr: string) => {
+  try {
+    const date = new Date(dateStr)
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  } catch (e) {
+    return dateStr
+  }
 }
 </script>
 
@@ -265,15 +284,20 @@ const removeFile = async (filePath: string) => {
              :key="file.path" 
              class="preview-item"
              :class="{ 'error': file.status === 'error' }">
-          <img :src="file.preview" alt="Preview" />
+          <el-image 
+            :src="file.preview" 
+            :preview-src-list="[file.preview]"
+            fit="contain"
+            class="preview-image"
+          />
           <div class="file-info">
             <p class="file-name">{{ file.path.split('/').pop() }}</p>
             <template v-if="file.status === 'completed'">
               <p class="file-date" v-if="file.uploadDate">
-                上传���期: {{ file.uploadDate }}
+                上传日期: {{ formatDate(file.uploadDate) }}
               </p>
               <p class="file-date" v-if="file.originalDate">
-                创建日期: {{ file.originalDate }}
+                创建日期: {{ formatDate(file.originalDate) }}
               </p>
             </template>
             <p class="file-status">{{ file.status }}</p>
@@ -306,10 +330,10 @@ const removeFile = async (filePath: string) => {
         取消
       </button>
       <button 
-        @click="clearCompletedFiles"
-        v-if="fileList.some(f => f.status === 'completed' || f.status === 'error')"
+        @click="clearAllFiles"
+        v-if="fileList.length > 0"
         class="clear-btn">
-        清理已完成
+        清空列表
       </button>
     </div>
   </div>
@@ -453,28 +477,37 @@ const removeFile = async (filePath: string) => {
 
 .preview-area {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  padding: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  padding: 20px;
 }
 
 .preview-item {
   position: relative;
   border-radius: 8px;
   overflow: hidden;
-  background: #f5f5f5;
-  padding: 8px;
+  background: var(--el-bg-color);
+  padding: 12px;
+  box-shadow: var(--el-box-shadow-lighter);
+  transition: all 0.3s;
+  width: 100%;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
 }
 
 .preview-item.error {
   border: 1px solid #ff4444;
 }
 
-.preview-item img {
+.preview-image {
   width: 100%;
-  height: 150px;
-  object-fit: cover;
+  height: auto;
+  min-height: 250px;
+  max-height: 400px;
+  object-fit: contain;
   border-radius: 4px;
+  margin-bottom: 8px;
 }
 
 .file-info {
@@ -500,8 +533,8 @@ const removeFile = async (filePath: string) => {
 
 .remove-btn {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 8px;
+  right: 8px;
   width: 24px;
   height: 24px;
   border-radius: 12px;
@@ -509,6 +542,17 @@ const removeFile = async (filePath: string) => {
   color: white;
   border: none;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.remove-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: scale(1.1);
 }
 
 .file-progress {

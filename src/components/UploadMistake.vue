@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 // 文件状态管理
 interface FileItem {
@@ -17,6 +19,7 @@ interface FileItem {
 const fileList = ref<FileItem[]>([])
 const isDragging = ref(false)
 const errorMessage = ref<string | null>(null)
+const router = useRouter()
 
 // 计算属性
 const isUploadDisabled = computed(() => {
@@ -29,10 +32,11 @@ const hasUploadingFiles = computed(() => {
 })
 
 const showError = (message: string, isWarning = false) => {
-  errorMessage.value = message
-  setTimeout(() => {
-    errorMessage.value = null
-  }, 3000)
+  if (isWarning) {
+    ElMessage.success(message)
+  } else {
+    ElMessage.error(message)
+  }
 }
 
 // 清理函数
@@ -106,7 +110,13 @@ const startUpload = async () => {
             file.uploadDate = progress.fileInfo.uploadDate
             file.originalDate = progress.fileInfo.originalDate
           }
-          showError('上传成功！', true)
+          
+          // 检查是否所有文件都上传完成
+          const allCompleted = fileList.value.every(f => f.status === 'completed')
+          if (allCompleted) {
+            showError('上传成功！', true)
+            router.push('/mistake')
+          }
           break
         
         case 'error':

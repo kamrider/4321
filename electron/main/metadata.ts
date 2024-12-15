@@ -62,6 +62,13 @@ export class MetadataManager {
 
       const fileStats = fs.statSync(originalPath)
       const hash = await this.calculateFileHash(originalPath)
+      
+      // 检查是否存在相同 hash 的文件
+      const existingFile = Object.values(this.metadata.files).find(file => file.hash === hash)
+      if (existingFile) {
+        throw new Error(`文件已存在: ${existingFile.originalFileName}`)
+      }
+
       const metadata = this.createDefaultMetadata(originalPath, targetPath, fileStats, hash)
       
       this.metadata.files[metadata.id] = metadata

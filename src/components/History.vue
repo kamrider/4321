@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
 const historyList = ref<HistoryItem[]>([])
@@ -8,7 +9,7 @@ const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    const result = await window.ipcRenderer.getMistakes()
+    const result = await window.ipcRenderer.uploadFile.getMistakes()
     if (result.success) {
       historyList.value = result.data.filter(item => {
         const trainingDate = new Date(item.metadata.nextTrainingDate)
@@ -93,6 +94,60 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
     return { text: `逾期 ${Math.abs(days)} 天`, status: 'overdue' }
   }
 }
+
+// 提交训练结果的方法
+const submitTraining = async (fileId: string, success: boolean) => {
+  try {
+    const result = await window.ipcRenderer.training.submitResult(fileId, success)
+    if (result.success) {
+      // 提交成功后重新获取训练状态
+      const nextTraining = await window.ipcRenderer.training.getNextTraining(fileId)
+      if (nextTraining.success) {
+        // 更新列表中对应项的训练信息
+        const item = historyList.value.find(item => item.fileId === fileId)
+        if (item) {
+          // 初始化确保
+          if (!item.metadata) {
+            item.metadata = {
+              proficiency: 0,
+              trainingInterval: 0,
+              lastTrainingDate: '',
+              nextTrainingDate: '',
+              subject: '',
+              tags: [],
+              notes: '',
+              trainingRecords: []
+            }
+          }
+          if (!item.metadata.trainingRecords) {
+            item.metadata.trainingRecords = []
+          }
+          
+          // 更新训练信息
+          item.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
+          item.metadata.proficiency = nextTraining.data.currentProficiency
+          item.metadata.trainingInterval = nextTraining.data.currentInterval
+          
+          // 添加新记录
+          item.metadata.trainingRecords.push({
+            date: new Date().toISOString(),
+            result: success ? 'success' : 'fail',
+            proficiencyBefore: item.metadata.proficiency,
+            proficiencyAfter: nextTraining.data.currentProficiency,
+            intervalAfter: nextTraining.data.currentInterval,
+            isOnTime: true
+          })
+        }
+      }
+      ElMessage.success('训练记录已保存')
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('提交训练结果失败:', error)
+    ElMessage.error('提交训练结果失败')
+  }
+}
 </script>
 
 <template>
@@ -130,6 +185,24 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
                     {{ formatTrainingStatus(item.metadata.nextTrainingDate).text }}
                   </span>
                 </p>
+              </div>
+              <div class="training-actions">
+                <el-button 
+                  type="success" 
+                  size="small"
+                  :disabled="formatTrainingStatus(item.metadata.nextTrainingDate).status === 'pending'"
+                  @click="submitTraining(item.fileId, true)"
+                >
+                  记住了
+                </el-button>
+                <el-button 
+                  type="danger" 
+                  size="small"
+                  :disabled="formatTrainingStatus(item.metadata.nextTrainingDate).status === 'pending'"
+                  @click="submitTraining(item.fileId, false)"
+                >
+                  没记住
+                </el-button>
               </div>
             </div>
           </div>
@@ -265,5 +338,12 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
 .training-status.overdue {
   background-color: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
+}
+
+.training-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 </style> 

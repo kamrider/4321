@@ -67,6 +67,19 @@ interface MistakeListResult {
   error?: string
 }
 
+// 在已有的接口定义后添加新的训练相关接口
+interface TrainingResult<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+}
+
+interface TrainingNextInfo {
+  nextTrainingDate: string
+  currentProficiency: number
+  currentInterval: number
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
@@ -181,19 +194,41 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
         throw error
       }
     },
+
+    // 获取错题列表
+    getMistakes: async () => {
+      try {
+        return await ipcRenderer.invoke('file:get-mistakes')
+      } catch (error) {
+        console.error('Error getting mistakes:', error)
+        throw error
+      }
+    },
   },
 
-  // You can expose other APTs you need here.
-  // ...
-  // 获取错题列表
-  getMistakes: async (): Promise<MistakeListResult> => {
-    try {
-      return await ipcRenderer.invoke('file:get-mistakes')
-        } catch (error) {
-          console.error('Error getting mistakes:', error)
-          throw error
-        }
+  // 添加训练相关方法
+  training: {
+    submitResult: async (fileId: string, success: boolean, trainingDate?: string): Promise<TrainingResult> => {
+      if (!fileId?.trim()) {
+        return { success: false, error: '无效的文件ID' }
       }
+      return await ipcRenderer.invoke('training:submit-result', fileId, success, trainingDate)
+    },
+
+    getHistory: async (fileId: string): Promise<TrainingResult<TrainingRecord[]>> => {
+      if (!fileId?.trim()) {
+        return { success: false, error: '无效的文件ID' }
+      }
+      return await ipcRenderer.invoke('training:get-history', fileId)
+    },
+
+    getNextTraining: async (fileId: string): Promise<TrainingResult<TrainingNextInfo>> => {
+      if (!fileId?.trim()) {
+        return { success: false, error: '无效的文件ID' }
+      }
+      return await ipcRenderer.invoke('training:get-next', fileId)
+    }
+  }
 })
 
 // --------- Preload scripts loading ---------
@@ -296,3 +331,4 @@ const validatePath = (path: string): boolean => {
   // Windows 路径或 Unix 路径
   return path.match(/^([a-zA-Z]:\\|\/)/i) !== null
 }
+

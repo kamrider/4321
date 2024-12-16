@@ -1,0 +1,27 @@
+{
+  "baseAdjustment": {
+    "success": 8,
+    "fail": -4
+  },
+  "intervalMultiplier": {
+    "success": 1.2,
+    "fail": 0.8
+  },
+  "timeRules": [
+    { "range": [-1, 0], "bonus": 2, "description": "准时或提前1天" },
+    { "range": [-3, -2], "bonus": 0, "description": "提前2-3天" },
+    { "range": [-7, -4], "bonus": -1, "description": "提前4-7天" },
+    { "range": [1, 2], "bonus": -1, "description": "延迟1-2天" },
+    { "range": [3, 7], "bonus": -2, "description": "延迟3-7天" },
+    { "range": [8, null], "bonus": -3, "description": "延迟超过一周" }
+  ],
+  "proficiencyThresholds": {
+    "low": 30,
+    "medium": 70,
+    "high": 90
+  },
+  "intervals": {
+    "min": 1,
+    "max": 21
+  }
+} 

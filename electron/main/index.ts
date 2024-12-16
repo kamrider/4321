@@ -6,6 +6,7 @@ import os from 'node:os'
 import * as fs from 'fs'
 import Store from 'electron-store'
 import { MetadataManager } from './metadata'
+import { TrainingManager } from './training-manager'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -82,6 +83,9 @@ const validateFilePaths = (filePaths: string[]) => {
 
 // 添加元数据管理器
 const metadataManager = new MetadataManager(targetDirectory)
+
+// 初始化训练管理器
+const trainingManager = new TrainingManager('config/training-config.json')
 
 // 上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
@@ -449,3 +453,83 @@ ipcMain.handle('file:get-mistakes', async () => {
     };
   }
 });
+
+// 提交训练结果
+ipcMain.handle('training:submit-result', async (event, fileId: string, success: boolean, trainingDate?: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    const fileMetadata = metadata.files[fileId]
+    
+    if (!fileMetadata) {
+      throw new Error('文件不存在')
+    }
+
+    // 处理训练结果
+    const updatedFields = await trainingManager.processTraining(fileMetadata, success, trainingDate)
+    
+    // 更新元数据
+    Object.assign(fileMetadata, updatedFields)
+    await metadataManager.saveMetadata()
+
+    return {
+      success: true,
+      data: fileMetadata
+    }
+  } catch (error) {
+    console.error('处理训练结果失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 获取训练历史
+ipcMain.handle('training:get-history', async (event, fileId: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    const fileMetadata = metadata.files[fileId]
+    
+    if (!fileMetadata) {
+      throw new Error('文件不存在')
+    }
+
+    return {
+      success: true,
+      data: fileMetadata.trainingRecords
+    }
+  } catch (error) {
+    console.error('获取训练历史失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 获取下次训练信息
+ipcMain.handle('training:get-next', async (event, fileId: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    const fileMetadata = metadata.files[fileId]
+    
+    if (!fileMetadata) {
+      throw new Error('文件不存在')
+    }
+
+    return {
+      success: true,
+      data: {
+        nextTrainingDate: fileMetadata.nextTrainingDate,
+        currentProficiency: fileMetadata.proficiency,
+        currentInterval: fileMetadata.trainingInterval
+      }
+    }
+  } catch (error) {
+    console.error('获取下次训练信息失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})

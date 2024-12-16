@@ -8,7 +8,7 @@ const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    const result = await window.ipcRenderer.getMistakes()
+    const result = await window.ipcRenderer.uploadFile.getMistakes()
     if (result.success) {
       mistakeList.value = result.data
     } else {

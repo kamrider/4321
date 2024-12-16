@@ -127,13 +127,19 @@ export class TrainingManager {
     currentInterval: number,
     success: boolean
   ): number {
+    // 基础乘数
     const baseMultiplier = success 
-      ? this.config.intervalMultiplier.success 
-      : this.config.intervalMultiplier.fail
+      ? this.config.intervalMultiplier.success  // 1.2
+      : this.config.intervalMultiplier.fail     // 0.8
     
-    const proficiencyFactor = this.calculateProficiencyFactor(currentProficiency)
+    // 根据熟练度计算额外的调整因子
+    // 熟练度越高，间隔增长越快
+    const proficiencyFactor = 1 + (currentProficiency / 100)
     
+    // 计算新间隔
     let newInterval = Math.round(currentInterval * baseMultiplier * proficiencyFactor)
+    
+    // 确保在配置的最小最大值范围内
     return Math.min(Math.max(newInterval, this.config.intervals.min), this.config.intervals.max)
   }
 

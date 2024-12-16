@@ -1,3 +1,12 @@
+interface TrainingRecord {
+  date: string                // 训练日期
+  result: 'success' | 'fail'  // 训练结果
+  proficiencyBefore: number   // 训练前熟练度
+  proficiencyAfter: number    // 训练后熟练度
+  intervalAfter: number       // 训练后设定的下次间隔
+  isOnTime: boolean          // 是否按时训练
+}
+
 interface FileMetadata {
   id: string                    // UUID作为唯一标识
   relativePath: string          // 相对于存储目录的路径
@@ -13,9 +22,10 @@ interface FileMetadata {
   trainingInterval: number     // 训练间隔(天)
   lastTrainingDate: string     // 上次训练时间
   nextTrainingDate: string     // 下次训练时间
-  subject: string             // 科目
-  tags: string[]              // 标签（例如：难度、类型等）
-  notes?: string              // 可选：笔记或备注
+  trainingRecords: TrainingRecord[]  // 训练历史记录数组
+  subject: string             
+  tags: string[]              
+  notes?: string              
 }
 
 interface MetadataStore {

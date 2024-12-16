@@ -422,7 +422,8 @@ ipcMain.handle('file:get-mistakes', async () => {
               nextTrainingDate: file.nextTrainingDate,
               subject: file.subject || '',
               tags: file.tags || [],
-              notes: file.notes || ''
+              notes: file.notes || '',
+              trainingRecords: file.trainingRecords || []
             }
           };
         } catch (error) {

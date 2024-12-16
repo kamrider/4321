@@ -50,7 +50,8 @@ export class MetadataManager {
       lastTrainingDate: now.toISOString(),
       nextTrainingDate: nextTrainingDate.toISOString(),
       subject: '',
-      tags: ['未分类']
+      tags: ['未分类'],
+      trainingRecords: [],
     }
   }
 

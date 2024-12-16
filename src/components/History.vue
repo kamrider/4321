@@ -1,26 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-
-interface HistoryItem {
-  fileId: string
-  path: string
-  preview: string
-  uploadDate: string
-  originalDate: string
-  originalFileName: string
-  fileSize: number
-  lastModified: string
-  hash?: string
-  metadata: {
-    proficiency: number
-    trainingInterval: number
-    lastTrainingDate: string
-    nextTrainingDate: string
-    subject: string
-    tags: string[]
-    notes: string
-  }
-}
+import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
 const historyList = ref<HistoryItem[]>([])
 const loading = ref(true)

@@ -30,7 +30,16 @@ interface UploadResult {
 }
 
 // 在已有的接口定义后添加新的接口
-interface MistakeItem {
+export interface TrainingRecord {
+  date: string
+  result: 'success' | 'fail'
+  proficiencyBefore: number
+  proficiencyAfter: number
+  intervalAfter: number
+  isOnTime: boolean
+}
+
+export interface MistakeItem {
   fileId: string
   path: string
   preview: string
@@ -48,6 +57,7 @@ interface MistakeItem {
     subject: string
     tags: string[]
     notes: string
+    trainingRecords: TrainingRecord[]
   }
 }
 

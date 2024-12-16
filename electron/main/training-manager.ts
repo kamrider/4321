@@ -80,8 +80,8 @@ export class TrainingManager {
   private getDefaultConfig(): TrainingConfig {
     return {
       baseAdjustment: {
-        success: 8,
-        fail: -4
+        success: 5,
+        fail: -10
       },
       intervalMultiplier: {
         success: 1.2,
@@ -124,20 +124,26 @@ export class TrainingManager {
 
   calculateNextInterval(
     currentProficiency: number,
-    currentInterval: number,
+    lastTrainingDate: string,
     success: boolean
   ): number {
     // 基础乘数
     const baseMultiplier = success 
-      ? this.config.intervalMultiplier.success  // 1.2
-      : this.config.intervalMultiplier.fail     // 0.8
+      ? this.config.intervalMultiplier.success
+      : this.config.intervalMultiplier.fail
     
     // 根据熟练度计算额外的调整因子
-    // 熟练度越高，间隔增长越快
-    const proficiencyFactor = 1 + (currentProficiency / 100)
+    const proficiencyFactor = 1 + Math.pow(1 - currentProficiency / 100, 2.5) * 0.8
+    
+    // 计算实际间隔（当前日期与上次训练日期之间的天数）
+    const lastTraining = new Date(lastTrainingDate)
+    const now = new Date()
+    lastTraining.setHours(0, 0, 0, 0)
+    now.setHours(0, 0, 0, 0)
+    const actualInterval = Math.floor((now.getTime() - lastTraining.getTime()) / (1000 * 60 * 60 * 24))
     
     // 计算新间隔
-    let newInterval = Math.round(currentInterval * baseMultiplier * proficiencyFactor)
+    let newInterval = Math.round(actualInterval * baseMultiplier * proficiencyFactor)
     
     // 确保在配置的最小最大值范围内
     return Math.min(Math.max(newInterval, this.config.intervals.min), this.config.intervals.max)
@@ -169,10 +175,11 @@ export class TrainingManager {
 
     const newInterval = this.calculateNextInterval(
       newProficiency,
-      metadata.trainingInterval,
+      metadata.lastTrainingDate,
       success
     )
 
+    // 使用实际训练日期计算下一次训练日期
     const nextTrainingDate = new Date(validTrainingDate)
     nextTrainingDate.setDate(nextTrainingDate.getDate() + newInterval)
 
@@ -185,7 +192,6 @@ export class TrainingManager {
       isOnTime: timeDeviation <= 0
     }
 
-    // 只返回需要更新的字段
     return {
       proficiency: newProficiency,
       trainingInterval: newInterval,
@@ -195,15 +201,14 @@ export class TrainingManager {
     }
   }
 
-  private validateTrainingDate(trainingDate?: string, defaultDate?: string): string {
-    if (!trainingDate && !defaultDate) {
+  private validateTrainingDate(trainingDate?: string): string {
+    if (!trainingDate) {
       return new Date().toISOString()
     }
     
-    const date = trainingDate || defaultDate
     try {
-      new Date(date).toISOString()
-      return date
+      new Date(trainingDate).toISOString()
+      return trainingDate
     } catch (error) {
       console.warn('无效的训练日期，使用当前时间:', error)
       return new Date().toISOString()

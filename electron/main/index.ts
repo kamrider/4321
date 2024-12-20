@@ -7,6 +7,7 @@ import * as fs from 'fs'
 import Store from 'electron-store'
 import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
+import { UserManager } from './userManager'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -86,6 +87,9 @@ const metadataManager = new MetadataManager(targetDirectory)
 
 // 初始化训练管理器
 const trainingManager = new TrainingManager('config/training-config.json')
+
+// 添加用户管理器实例
+const userManager = new UserManager()
 
 // 上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
@@ -531,5 +535,53 @@ ipcMain.handle('training:get-next', async (event, fileId: string) => {
       success: false,
       error: error.message
     }
+  }
+})
+
+// 添加用户相关的IPC处理
+ipcMain.handle('user:register', async (_, username: string, password: string) => {
+  return await userManager.register(username, password)
+})
+
+ipcMain.handle('user:login', async (_, username: string, password: string) => {
+  return await userManager.login(username, password)
+})
+
+ipcMain.handle('user:get-current', () => {
+  return userManager.getCurrentUser()
+})
+
+ipcMain.handle('user:logout', async () => {
+  await userManager.logout()
+  return { success: true }
+})
+
+ipcMain.handle('user:get-info', (_, userId: string) => {
+  return userManager.getUserInfo(userId)
+})
+
+ipcMain.handle('user:get-all', () => {
+  return userManager.getAllUsers()
+})
+
+ipcMain.handle('user:switch', async (_, userId: string) => {
+  try {
+    const user = userManager.getUserInfo(userId)
+    if (!user) {
+      return { success: false, error: '用户不存在' }
+    }
+    
+    userManager.userStore.currentUser = userId
+    userManager.saveUserStore()
+    
+    return { 
+      success: true, 
+      data: { 
+        userId: user.id, 
+        username: user.username 
+      } 
+    }
+  } catch (error) {
+    return { success: false, error: error.message }
   }
 })

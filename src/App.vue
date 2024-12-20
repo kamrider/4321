@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import Sidebar from './components/Sidebar.vue'
-import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
-const router = useRouter()
-
-const handleMenuClick = (route: string) => {
-  router.push(route)
-}
+const route = useRoute()
+const showSidebar = computed(() => !['login'].includes(route.name as string))
 </script>
 
 <template>
   <div class="app-container">
-    <Sidebar @menu-click="handleMenuClick" />
-    <div class="main-content">
-      <div class="content-wrapper">
-        <router-view></router-view>
-      </div>
+    <Sidebar v-if="showSidebar" />
+    <div :class="['main-content', { 'full-width': !showSidebar }]">
+      <router-view></router-view>
     </div>
   </div>
 </template>
@@ -27,25 +22,23 @@ const handleMenuClick = (route: string) => {
 }
 
 .main-content {
-  position: fixed;
-  top: 2%;
-  right: 2%;
-  bottom: 2%;
-  left: calc(200px + 2%);
-  background-color: #f5f7fa;
-  overflow-y: auto;
-  padding: 2%;
+  flex: 1;
+  margin-left: 200px; /* 侧边栏宽度 */
+  transition: margin-left 0.3s;
 }
 
-/* 响应式布局 - 当侧边栏折叠时 */
+.main-content.full-width {
+  margin-left: 0;
+}
+
+/* 响应式布局 */
 @media (max-width: 768px) {
   .main-content {
-    left: calc(64px + 2%);
+    margin-left: 64px;
   }
-}
-
-.content-wrapper {
-  height: 100%;
-  width: 100%;
+  
+  .main-content.full-width {
+    margin-left: 0;
+  }
 }
 </style>

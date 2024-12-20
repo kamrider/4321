@@ -1,42 +1,72 @@
 <template>
-  <el-menu
-    class="sidebar-menu"
-    :default-active="activeRoute"
-    :collapse="isCollapse"
-    @select="handleSelect"
-    background-color="#f5f7fa"
-    text-color="#303133"
-    active-text-color="#409EFF"
-  >
-    <el-menu-item index="/upload">
-      <el-icon><Upload /></el-icon>
-      <template #title>上传图片</template>
-    </el-menu-item>
+  <div class="sidebar">
+    <el-menu
+      class="sidebar-menu"
+      :default-active="activeRoute"
+      :collapse="isCollapse"
+      @select="handleSelect"
+      background-color="#f5f7fa"
+      text-color="#303133"
+      active-text-color="#409EFF"
+    >
+      <el-menu-item index="/upload">
+        <el-icon><Upload /></el-icon>
+        <template #title>上传图片</template>
+      </el-menu-item>
 
-    <el-menu-item index="/mistake">
-      <el-icon><DocumentCopy /></el-icon>
-      <template #title>我的错题</template>
-    </el-menu-item>
+      <el-menu-item index="/mistake">
+        <el-icon><DocumentCopy /></el-icon>
+        <template #title>我的错题</template>
+      </el-menu-item>
 
-    <el-menu-item index="/history">
-      <el-icon><Notebook /></el-icon>
-      <template #title>训练内容</template>
-    </el-menu-item>
+      <el-menu-item index="/history">
+        <el-icon><Notebook /></el-icon>
+        <template #title>训练内容</template>
+      </el-menu-item>
 
-    <el-menu-item index="/settings">
-      <el-icon><Setting /></el-icon>
-      <template #title>设置</template>
-    </el-menu-item>
-  </el-menu>
+      <el-menu-item index="/settings">
+        <el-icon><Setting /></el-icon>
+        <template #title>设置</template>
+      </el-menu-item>
+    </el-menu>
+
+    <div class="user-info">
+      <el-dropdown @command="handleUserCommand">
+        <div class="user-dropdown-link">
+          <el-avatar :size="32" icon="UserFilled" />
+          <span class="username">{{ currentUser?.username || '未登录' }}</span>
+          <el-icon><CaretBottom /></el-icon>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item 
+              v-for="user in users" 
+              :key="user.id"
+              :command="{ type: 'switch', userId: user.id }"
+              :disabled="user.id === currentUser?.id"
+            >
+              切换到: {{ user.username }}
+            </el-dropdown-item>
+            <el-dropdown-item divided command="logout">
+              退出登录
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Upload, DocumentCopy, Notebook, Setting } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
+const currentUser = ref<{ id: string; username: string } | null>(null)
+const users = ref<Array<{ id: string; username: string }>>([])
 
 // 控制菜单折叠
 const isCollapse = ref(false)
@@ -48,31 +78,100 @@ const activeRoute = computed(() => route.path)
 const handleSelect = (index: string) => {
   router.push(index)
 }
-</script>
 
-<style scoped>
-.sidebar-menu {
-  height: 100vh;
-  border-right: 1px solid #e6e6e6;
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-}
-
-.sidebar-menu:not(.el-menu--collapse) {
-  width: 200px;
-}
-
-/* 适配窗口大小变化 */
-@media (max-width: 768px) {
-  .sidebar-menu:not(.el-menu--collapse) {
-    width: 64px;
+// 获取当前用户信息
+const loadCurrentUser = async () => {
+  try {
+    const userId = await window.electron.invoke('user:get-current')
+    if (userId) {
+      const userInfo = await window.electron.invoke('user:get-info', userId)
+      currentUser.value = userInfo
+    }
+  } catch (error) {
+    console.error('加载用户信息失败:', error)
   }
 }
 
-/* 自定义菜单样式 */
+// 加载所有用户列表
+const loadUsers = async () => {
+  try {
+    users.value = await window.electron.invoke('user:get-all')
+  } catch (error) {
+    console.error('加载用户列表失败:', error)
+  }
+}
+
+// 处理用户相关操作
+const handleUserCommand = async (command: string | { type: string; userId: string }) => {
+  try {
+    if (typeof command === 'object' && command.type === 'switch') {
+      // 切换用户
+      const result = await window.electron.invoke('user:switch', command.userId)
+      if (result.success) {
+        ElMessage.success('切换用户成功')
+        await loadCurrentUser()
+        router.push('/upload')
+      } else {
+        ElMessage.error(result.error || '切换用户失败')
+      }
+    } else if (command === 'logout') {
+      // 退出登录
+      await window.electron.invoke('user:logout')
+      currentUser.value = null
+      router.push('/login')
+      ElMessage.success('已退出登录')
+    }
+  } catch (error) {
+    ElMessage.error('操作失败')
+    console.error(error)
+  }
+}
+
+onMounted(async () => {
+  await loadCurrentUser()
+  await loadUsers()
+})
+</script>
+
+<style scoped>
+.sidebar {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e6e6e6;
+  background-color: #f5f7fa;
+  width: 200px;
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+.sidebar-menu {
+  flex: 1;
+  border-right: none;
+}
+
+.user-info {
+  padding: 16px;
+  border-top: 1px solid #e6e6e6;
+  background-color: white;
+  margin-top: auto;
+}
+
+.user-dropdown-link {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.username {
+  margin: 0 8px;
+  font-size: 14px;
+  color: #303133;
+}
+
+/* 菜单项样式 */
 :deep(.el-menu-item) {
   height: 56px;
   line-height: 56px;
@@ -90,16 +189,14 @@ const handleSelect = (index: string) => {
   color: #409EFF !important;
 }
 
-/* 图标样式 */
-:deep(.el-icon) {
-  font-size: 18px;
-  vertical-align: middle;
-  margin-right: 5px;
-  color: inherit;
-}
-
-/* 确保内容不会被遮挡 */
-:deep(.el-menu--collapse) {
-  width: 64px;
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 64px;
+  }
+  
+  .username {
+    display: none;
+  }
 }
 </style> 

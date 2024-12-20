@@ -10,7 +10,9 @@ const showSidebar = computed(() => !['login'].includes(route.name as string))
   <div class="app-container">
     <Sidebar v-if="showSidebar" />
     <div :class="['main-content', { 'full-width': !showSidebar }]">
-      <router-view></router-view>
+      <div class="content-wrapper">
+        <router-view></router-view>
+      </div>
     </div>
   </div>
 </template>
@@ -22,23 +24,35 @@ const showSidebar = computed(() => !['login'].includes(route.name as string))
 }
 
 .main-content {
-  flex: 1;
-  margin-left: 200px; /* 侧边栏宽度 */
-  transition: margin-left 0.3s;
+  position: fixed;
+  top: 2%;
+  right: 2%;
+  bottom: 2%;
+  left: calc(200px + 2%);
+  background-color: #e6f0fc; /* 调试用的背景色，之后可以改回 #fff 或需要的颜色 */
+  overflow-y: auto;
+  padding: 2%;
+  border-radius: 8px; /* 可选：添加圆角 */
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05); /* 可选：添加阴影 */
 }
 
 .main-content.full-width {
-  margin-left: 0;
+  left: 2%; /* 当不显示侧边栏时占据全宽 */
 }
 
-/* 响应式布局 */
+/* 响应式布局 - 当侧边栏折叠时 */
 @media (max-width: 768px) {
   .main-content {
-    margin-left: 64px;
+    left: calc(64px + 2%);
   }
   
   .main-content.full-width {
-    margin-left: 0;
+    left: 2%;
   }
+}
+
+.content-wrapper {
+  height: 100%;
+  width: 100%;
 }
 </style>

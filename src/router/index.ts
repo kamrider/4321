@@ -10,6 +10,11 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
+      path: '/',
+      redirect: '/upload',
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/login',
       name: 'login',
       component: Login,
@@ -42,14 +47,18 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach(async (to, from, next) => {
-  if (to.meta.requiresAuth) {
-    const currentUser = await window.electron.invoke('user:get-current')
-    if (!currentUser) {
-      next('/login')
-      return
-    }
+  if (to.path === '/login') {
+    next()
+    return
   }
-  next()
+
+  const currentUser = await window.electron.invoke('user:get-current')
+  
+  if (!currentUser && to.meta.requiresAuth) {
+    next('/login')
+  } else {
+    next()
+  }
 })
 
 export default router

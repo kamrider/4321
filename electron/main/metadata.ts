@@ -2,18 +2,25 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
+import { app } from 'electron'
 
 const METADATA_FILE = '.metadata.json'
 
 export class MetadataManager {
-  private metadataPath: string
-  private baseDir: string
-  private metadata: MetadataStore
+  private baseDir: string | null = null
+  private metadataPath: string | null = null
+  private metadata: MetadataStore | null = null
 
-  constructor(storageDir: string) {
-    this.baseDir = storageDir
-    this.metadataPath = path.join(storageDir, METADATA_FILE)
-    this.metadata = this.createDefaultStore(storageDir)
+  constructor(initialPath: string | null = null) {
+    if (initialPath) {
+      this.setUserStoragePath(initialPath)
+    }
+  }
+
+  setUserStoragePath(userId: string) {
+    const userDir = path.join(app.getPath('userData'), 'users', userId)
+    this.baseDir = path.join(userDir, 'images')
+    this.metadataPath = path.join(userDir, 'metadata.json')
     this.loadMetadata()
   }
 

@@ -263,32 +263,26 @@ const toggleAnswer = () => {
                  'is-answer': !item.metadata.isPaired && item.metadata.type === 'answer',
                  'is-dragging': item === draggedItem,
                  'can-pair': !item.metadata.isPaired && draggedItem && 
-                            item === dragOverItem && 
-                            draggedItem.metadata.type !== item.metadata.type,
-                 'no-pair': draggedItem && item === dragOverItem && 
-                           draggedItem.metadata.type === item.metadata.type,
-                 'is-paired': item.metadata.isPaired
+                            draggedItem !== item && 
+                            draggedItem.metadata.type !== item.metadata.type
                }"
-               :draggable="true"
-               @click="item.metadata.isPaired ? handleViewDetail(item) : null"
-               @dragstart="handleDragStart(item, $event)"
-               @dragover="handleDragOver(item, $event)"
-               @dragend="handleDragEnd">
+               @click="handlePreview(item)"
+               @dragstart="handleDragStart(item)"
+               @dragend="handleDragEnd"
+               @dragover.prevent
+               @drop="handleDrop(item)"
+               draggable="true"
+          >
             <el-image 
               :src="item.preview" 
               :preview-src-list="[]"
               fit="contain"
               class="preview-image"
-              @click.stop="item.metadata.isPaired ? handleViewDetail(item) : handlePreview(item)"
+              @click.stop="handlePreview(item)"
             />
-            <div class="file-info" @click="!item.metadata.isPaired && toggleImageType(item)">
-              <p class="file-name">{{ item.originalFileName }}</p>
-              <p class="type-indicator" v-if="!item.metadata.isPaired">
-                {{ item.metadata.type === 'mistake' ? '错题' : '答案' }}
-              </p>
-              <p class="type-indicator is-paired" v-else>
-                已配对
-              </p>
+            <div class="item-info">
+              <span class="filename">{{ item.originalFileName }}</span>
+              <span class="type-tag">{{ item.metadata.type === 'mistake' ? '错题' : '答案' }}</span>
             </div>
           </div>
         </div>
@@ -299,7 +293,7 @@ const toggleAnswer = () => {
   <!-- 添加预览弹窗 -->
   <el-dialog
     v-model="previewVisible"
-    :title="previewItem?.metadata.type === 'mistake' ? '错题预览' : '答案预览'"
+    :title="previewItem?.metadata?.type === 'mistake' ? '错题详情' : '答案详情'"
     width="80%"
     :before-close="handleClosePreview"
     class="preview-dialog"
@@ -313,9 +307,7 @@ const toggleAnswer = () => {
       />
       <div class="preview-info">
         <p class="preview-filename">{{ previewItem.originalFileName }}</p>
-        <p class="preview-type">
-          {{ previewItem.metadata.type === 'mistake' ? '错题' : '答案' }}
-        </p>
+        <p class="preview-type">{{ previewItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
       </div>
     </div>
   </el-dialog>
@@ -687,6 +679,44 @@ const toggleAnswer = () => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+.mistake-detail-dialog {
+  .detail-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .mistake-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .detail-image {
+    width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+  }
+
+  .detail-info {
+    padding: 10px;
+    background: #f5f7fa;
+    border-radius: 4px;
+
+    .detail-filename {
+      margin: 0;
+      font-size: 14px;
+      color: #606266;
+    }
+
+    .detail-type {
+      margin: 5px 0 0;
+      font-size: 12px;
+      color: #909399;
+    }
   }
 }
 </style>

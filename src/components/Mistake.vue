@@ -13,10 +13,8 @@ const showAnswer = ref(false)
 
 // 添加查看详情处理函数
 const handleViewDetail = (item: MistakeItem) => {
-  if (item.metadata?.isPaired) {
-    activeItem.value = item
-    dialogVisible.value = true
-  }
+  activeItem.value = item
+  dialogVisible.value = true
 }
 
 // 添加关闭弹窗处理函数
@@ -29,6 +27,7 @@ const handleCloseDialog = () => {
 // 添加切换答案显示的函数
 const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
+  console.log('切换答案显示:', showAnswer.value)
 }
 
 // 修改获取数据的过滤逻辑
@@ -139,10 +138,10 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
                @click="item.metadata?.isPaired ? handleViewDetail(item) : null">
             <el-image 
               :src="item.preview" 
-              :preview-src-list="item.metadata?.isPaired ? [] : [item.preview]"
+              :preview-src-list="[]"
               fit="contain"
               class="preview-image"
-              @click.stop="item.metadata?.isPaired ? handleViewDetail(item) : null"
+              @click.stop="handleViewDetail(item)"
             />
             <div class="file-info">
               <p class="file-name">{{ item.originalFileName }}</p>

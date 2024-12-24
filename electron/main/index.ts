@@ -397,52 +397,56 @@ ipcMain.handle('file:get-mistakes', async () => {
 
     // 从元数据管理器获取所有文件信息
     const metadata = await metadataManager.getMetadata();
-
-    // 使用 Object.entries() 获取文件的键值对，并进行处理
-    const mistakes = await Promise.all(
-      Object.entries(metadata.files).map(async ([id, file]) => {
-        try {
-          const filePath = path.join(targetDirectory, file.relativePath);
-
-          // 读取文件并转换为 Base64 数据
-          const fileData = await fs.promises.readFile(filePath);
-          const fileExtension = path.extname(filePath).toLowerCase().slice(1);
-          const base64Data = fileData.toString('base64');
-
-          return {
-            fileId: id,
-            path: filePath,
-            preview: `data:image/${fileExtension};base64,${base64Data}`,
-            uploadDate: file.uploadDate,
-            originalDate: file.originalDate,
-            originalFileName: file.originalFileName,
-            fileSize: file.fileSize,
-            lastModified: file.lastModified,
-            hash: file.hash,
-            metadata: {
-              proficiency: file.proficiency,
-              trainingInterval: file.trainingInterval,
-              lastTrainingDate: file.lastTrainingDate,
-              nextTrainingDate: file.nextTrainingDate,
-              subject: file.subject || '',
-              tags: file.tags || [],
-              notes: file.notes || '',
-              trainingRecords: file.trainingRecords || [],
-              type: file.type || 'mistake',
-              pairId: file.pairId || null,
-              isPaired: file.isPaired || false
-            }
-          };
-        } catch (error) {
-          console.error(`处理文件 ${id} 失败:`, error);
-          return null;
+    const allFiles = Object.entries(metadata.files);
+    
+    // 创建一个 Map 来存储所有文件
+    const fileMap = new Map();
+    
+    // 第一步：处理所有文件的基本信息
+    for (const [id, file] of allFiles) {
+      try {
+        const filePath = path.join(targetDirectory, file.relativePath);
+        const fileData = await fs.promises.readFile(filePath);
+        const fileExtension = path.extname(filePath).toLowerCase().slice(1);
+        const base64Data = fileData.toString('base64');
+        
+        fileMap.set(id, {
+          fileId: id,
+          path: filePath,
+          preview: `data:image/${fileExtension};base64,${base64Data}`,
+          uploadDate: file.uploadDate,
+          originalDate: file.originalDate,
+          originalFileName: file.originalFileName,
+          fileSize: file.fileSize,
+          lastModified: file.lastModified,
+          hash: file.hash,
+          metadata: {
+            ...file,
+            pairedWith: null  // 初始化 pairedWith 为 null
+          }
+        });
+      } catch (error) {
+        console.error(`处理文件 ${id} 失败:`, error);
+      }
+    }
+    
+    // 第二步：处理配对关系
+    for (const [id, file] of allFiles) {
+      if (file.isPaired && file.pairId) {
+        const currentFile = fileMap.get(id);
+        // 查找具有相同 pairId 但不是当前文件的配对文件
+        const pairedFile = Array.from(fileMap.values()).find(
+          f => f.metadata.pairId === file.pairId && f.fileId !== id
+        );
+        
+        if (currentFile && pairedFile) {
+          currentFile.metadata.pairedWith = pairedFile;
         }
-      })
-    );
-
-    // 过滤掉处理失败的项
-    const validMistakes = mistakes.filter((item): item is NonNullable<typeof item> => item !== null);
-
+      }
+    }
+    
+    const validMistakes = Array.from(fileMap.values());
+    
     return {
       success: true,
       data: validMistakes

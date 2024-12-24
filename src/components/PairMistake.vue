@@ -113,7 +113,7 @@ const handleDragEnd = () => {
     mistakeList.value.splice(sourceIndex, 1)
     mistakeList.value.splice(targetIndex, 0, sourceItem)
   } else {
-    // 不同类型，尝试配对
+    // 不同类型，试配对
     pairItems(sourceItem, targetItem)
   }
 
@@ -126,21 +126,18 @@ const pairItems = async (item1: MistakeItem, item2: MistakeItem) => {
     await window.ipcRenderer.metadata.pairImages(item1.fileId, item2.fileId)
     ElMessage.success('配对成功！')
     
-    // 不移除，而是更新状态
-    item1.metadata.isPaired = true
-    item2.metadata.isPaired = true
+    // 确保错题在前，答案在后
+    const [mistakeItem, answerItem] = item1.metadata.type === 'mistake' 
+      ? [item1, item2] 
+      : [item2, item1]
     
-    // 确保错题在上，答案在下
-    const pairedItems = [item1, item2].sort((a, b) => {
-      if (a.metadata.type === 'mistake') return -1;
-      if (b.metadata.type === 'mistake') return 1;
-      return 0;
-    });
+    // 更新状态
+    mistakeItem.metadata.isPaired = true
+    mistakeItem.metadata.pairId = `pair_${Date.now()}`
+    mistakeItem.metadata.pairedWith = answerItem
     
-    // 更新样式类
-    pairedItems.forEach(item => {
-      item.metadata.pairId = `pair_${Date.now()}`
-    });
+    // 从列表中移除答案项
+    mistakeList.value = mistakeList.value.filter(item => item !== answerItem)
     
   } catch (error) {
     ElMessage.error('配对失败')
@@ -224,19 +221,10 @@ const toggleImageType = async (item: MistakeItem) => {
 
 .preview-item {
   position: relative;
+  border: 2px solid transparent;
   border-radius: 8px;
-  overflow: hidden;
-  background: var(--el-bg-color);
   padding: 12px;
-  box-shadow: var(--el-box-shadow-lighter);
-  transition: all 0.3s;
-  width: 100%;
-  min-height: 300px;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
   transition: all 0.3s ease;
-  border: 3px solid transparent;
 }
 
 .preview-image {
@@ -320,10 +308,9 @@ const toggleImageType = async (item: MistakeItem) => {
 }
 
 .preview-item.can-pair {
-  border-color: #E6A23C;
-  background-color: #faecd8;
+  border-color: var(--el-color-success);
+  box-shadow: 0 0 15px var(--el-color-success);
   transform: scale(1.05);
-  box-shadow: 0 0 15px rgba(230, 162, 60, 0.4);
 }
 
 .preview-item.no-pair {
@@ -340,8 +327,21 @@ const toggleImageType = async (item: MistakeItem) => {
 .preview-item.is-paired {
   border-color: #E6A23C;
   background-color: #fdf6ec;
-  box-shadow: 0 0 20px rgba(230, 162, 60, 0.6);
-  transform: scale(1.02);  /* 稍微放大一点点 */
+  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.2);
+  transform: rotate(2deg) translateY(-5px);
+}
+
+.preview-item.is-paired::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  right: -5px;
+  bottom: -5px;
+  background-color: #faecd8;
+  border: 2px solid #E6A23C;
+  border-radius: 8px;
+  z-index: -1;
 }
 
 .preview-item.is-paired.is-mistake {

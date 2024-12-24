@@ -402,7 +402,7 @@ ipcMain.handle('file:get-mistakes', async () => {
     // 创建一个 Map 来存储所有文件
     const fileMap = new Map();
     
-    // 第一步：处理所有文件的基本信息
+    // 第一步：处理所有文件的基���息
     for (const [id, file] of allFiles) {
       try {
         const filePath = path.join(targetDirectory, file.relativePath);
@@ -434,13 +434,13 @@ ipcMain.handle('file:get-mistakes', async () => {
     for (const [id, file] of allFiles) {
       if (file.isPaired && file.pairId) {
         const currentFile = fileMap.get(id);
-        // 查找具有相同 pairId 但不是当前文件的配对文件
-        const pairedFile = Array.from(fileMap.values()).find(
+        // 查找所有具有相同 pairId 的配对文件
+        const pairedFiles = Array.from(fileMap.values()).filter(
           f => f.metadata.pairId === file.pairId && f.fileId !== id
         );
         
-        if (currentFile && pairedFile) {
-          currentFile.metadata.pairedWith = pairedFile;
+        if (currentFile && pairedFiles.length > 0) {
+          currentFile.metadata.pairedWith = pairedFiles;
         }
       }
     }
@@ -562,11 +562,22 @@ ipcMain.handle('metadata:pair-images', async (_, fileId1: string, fileId2: strin
   try {
     const metadata = await metadataManager.getMetadata()
     if (metadata.files[fileId1] && metadata.files[fileId2]) {
-      const pairId = `pair_${Date.now()}`
-      metadata.files[fileId1].pairId = pairId
-      metadata.files[fileId2].pairId = pairId
-      metadata.files[fileId1].isPaired = true
-      metadata.files[fileId2].isPaired = true
+      // 如果错题已经有 pairId，使用现有的；否则创建新的
+      const mistakeFile = metadata.files[fileId1].type === 'mistake' 
+        ? metadata.files[fileId1] 
+        : metadata.files[fileId2]
+      const answerFile = metadata.files[fileId1].type === 'answer' 
+        ? metadata.files[fileId1] 
+        : metadata.files[fileId2]
+      
+      const pairId = mistakeFile.pairId || `pair_${Date.now()}`
+      
+      // 使用相同的 pairId
+      mistakeFile.pairId = pairId
+      answerFile.pairId = pairId
+      mistakeFile.isPaired = true
+      answerFile.isPaired = true
+      
       await metadataManager.saveMetadata(metadata)
       return { success: true }
     }
@@ -603,6 +614,47 @@ ipcMain.handle('metadata:unpair-images', async (event, fileId1: string, fileId2:
     }
   } catch (error) {
     console.error('解绑失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 获取训练配置
+ipcMain.handle('config:get-training-config', async () => {
+  try {
+    return {
+      success: true,
+      data: trainingManager.getDefaultConfig()
+    }
+  } catch (error) {
+    console.error('获取训练配置失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 更新训练配置
+ipcMain.handle('config:update-training-config', async (_, config: TrainingConfig) => {
+  try {
+    // 验证新配置
+    if (!trainingManager.validateConfig(config)) {
+      throw new Error('配置格式无效')
+    }
+    
+    // 保存配置到文件
+    const configPath = path.join(app.getPath('userData'), 'training-config.json')
+    await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2))
+    
+    // 更新训练管理器中的配置
+    trainingManager.updateConfig(config)
+    
+    return { success: true }
+  } catch (error) {
+    console.error('更新训练配置失败:', error)
     return {
       success: false,
       error: error.message

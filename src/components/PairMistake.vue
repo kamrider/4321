@@ -2,9 +2,10 @@
 import { ref, onMounted } from 'vue'
 import type { MistakeItem } from '../../electron/preload'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const uploadedFileIds = ref<string[]>([])
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -13,8 +14,6 @@ const draggedItem = ref<MistakeItem | null>(null)
 const dragOverItem = ref<MistakeItem | null>(null)
 const dialogVisible = ref(false)
 const activeItem = ref<MistakeItem | null>(null)
-const previewVisible = ref(false)
-const previewItem = ref<MistakeItem | null>(null)
 const showAnswer = ref(false)
 
 onMounted(async () => {
@@ -126,7 +125,7 @@ const handleDragEnd = () => {
       // 拖到空白处，执行分离
       unpairItems(sourceItem)
     } else if (targetItem.metadata.isPaired) {
-      // 拖到另一个配对项，交换位置
+      // 拖到另一个配对项，交换置
       const sourceIndex = mistakeList.value.indexOf(sourceItem)
       const targetIndex = mistakeList.value.indexOf(targetItem)
       mistakeList.value.splice(sourceIndex, 1)
@@ -149,52 +148,69 @@ const handleDragEnd = () => {
 
 const pairItems = async (item1: MistakeItem, item2: MistakeItem) => {
   try {
-    await window.ipcRenderer.metadata.pairImages(item1.fileId, item2.fileId)
-    ElMessage.success('配对成功！')
-    
     // 确保错题在前，答案在后
     const [mistakeItem, answerItem] = item1.metadata.type === 'mistake' 
       ? [item1, item2] 
       : [item2, item1]
     
+    // 如果是答案项与答案项，或错题项与错题项，不允许配对
+    if (mistakeItem.metadata.type === answerItem.metadata.type) {
+      ElMessage.warning('相同类型的项目不能配对')
+      return
+    }
+    
+    await window.ipcRenderer.metadata.pairImages(mistakeItem.fileId, answerItem.fileId)
+    
     // 更新状态
     mistakeItem.metadata.isPaired = true
     mistakeItem.metadata.pairId = `pair_${Date.now()}`
-    mistakeItem.metadata.pairedWith = answerItem
+    
+    // 如果已经有配对答案，创建数组存储
+    if (!Array.isArray(mistakeItem.metadata.pairedWith)) {
+      mistakeItem.metadata.pairedWith = []
+    }
+    mistakeItem.metadata.pairedWith.push(answerItem)
+    
+    answerItem.metadata.isPaired = true
+    answerItem.metadata.pairId = mistakeItem.metadata.pairId
+    answerItem.metadata.pairedWith = mistakeItem
     
     // 从列表中移除答案项
     mistakeList.value = mistakeList.value.filter(item => item !== answerItem)
     
+    ElMessage.success('配对成功！')
   } catch (error) {
     ElMessage.error('配对失败')
   }
 }
 
-// 添加解绑函数
 const unpairItems = async (item: MistakeItem) => {
   if (!item.metadata.pairedWith) return
   
   try {
-    // 完整调用解绑 API
-    await window.ipcRenderer.metadata.unpairImages(item.fileId, item.metadata.pairedWith.fileId)
+    // 获取所有配对项
+    const pairedItems = Array.isArray(item.metadata.pairedWith) 
+      ? item.metadata.pairedWith 
+      : [item.metadata.pairedWith]
     
-    // 获取配对项
-    const pairedItem = item.metadata.pairedWith
-    
-    // 重置两个项目的状态
-    item.metadata.isPaired = false
-    item.metadata.pairId = null
-    item.metadata.pairedWith = null
-    
-    if (pairedItem) {
+    // 解绑所有配对项
+    for (const pairedItem of pairedItems) {
+      await window.ipcRenderer.metadata.unpairImages(item.fileId, pairedItem.fileId)
+      
+      // 重置配对项状态
       pairedItem.metadata.isPaired = false
       pairedItem.metadata.pairId = null
       pairedItem.metadata.pairedWith = null
       
-      // 将答案项添加回列表的适当位置
+      // 将答案项添加回列表
       const mistakeIndex = mistakeList.value.indexOf(item)
       mistakeList.value.splice(mistakeIndex + 1, 0, pairedItem)
     }
+    
+    // 重置当前项状态
+    item.metadata.isPaired = false
+    item.metadata.pairId = null
+    item.metadata.pairedWith = null
     
     ElMessage.success('解绑成功')
   } catch (error) {
@@ -215,41 +231,43 @@ const toggleImageType = async (item: MistakeItem) => {
   }
 }
 
-// 添加查看详情的处理函数
+// 添加预览处理函数
 const handleViewDetail = (item: MistakeItem) => {
-  if (item.metadata.isPaired) {
-    activeItem.value = item
-    dialogVisible.value = true
-  }
+  activeItem.value = item
+  dialogVisible.value = true
 }
 
-// 添加关闭弹窗的处理函数
+// 添加关闭预览处理函数
 const handleCloseDialog = () => {
   dialogVisible.value = false
   activeItem.value = null
   showAnswer.value = false
 }
 
-// 添加预览处理函数
-const handlePreview = (item: MistakeItem) => {
-  previewItem.value = item
-  previewVisible.value = true
-}
-
-// 添加关闭预览处理函数
-const handleClosePreview = () => {
-  previewVisible.value = false
-  previewItem.value = null
-}
-
 // 添加切换答案显示的函数
 const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
+}
+
+// 添加确认处理函数
+const handleConfirm = () => {
+  router.push('/mistake')
 }
 </script>
 
 <template>
   <div class="pair-mistake-container">
+    <div class="confirm-area">
+      <el-button 
+        type="primary" 
+        size="large"
+        :disabled="false"
+        @click="handleConfirm"
+      >
+        完成配对并继续
+      </el-button>
+    </div>
+    
     <el-empty v-if="!loading && mistakeList.length === 0" description="暂无未配对的图片" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
@@ -263,26 +281,31 @@ const toggleAnswer = () => {
                  'is-answer': !item.metadata.isPaired && item.metadata.type === 'answer',
                  'is-dragging': item === draggedItem,
                  'can-pair': !item.metadata.isPaired && draggedItem && 
-                            draggedItem !== item && 
-                            draggedItem.metadata.type !== item.metadata.type
+                            item === dragOverItem && 
+                            draggedItem.metadata.type !== item.metadata.type,
+                 'no-pair': draggedItem && item === dragOverItem && 
+                           draggedItem.metadata.type === item.metadata.type,
+                 'is-paired': item.metadata.isPaired
                }"
-               @click="handlePreview(item)"
-               @dragstart="handleDragStart(item)"
-               @dragend="handleDragEnd"
-               @dragover.prevent
-               @drop="handleDrop(item)"
-               draggable="true"
-          >
+               :draggable="true"
+               @dragstart="handleDragStart(item, $event)"
+               @dragover="handleDragOver(item, $event)"
+               @dragend="handleDragEnd">
             <el-image 
               :src="item.preview" 
               :preview-src-list="[]"
               fit="contain"
               class="preview-image"
-              @click.stop="handlePreview(item)"
+              @click.stop="handleViewDetail(item)"
             />
-            <div class="item-info">
-              <span class="filename">{{ item.originalFileName }}</span>
-              <span class="type-tag">{{ item.metadata.type === 'mistake' ? '错题' : '答案' }}</span>
+            <div class="file-info" @click="!item.metadata.isPaired && toggleImageType(item)">
+              <p class="file-name">{{ item.originalFileName }}</p>
+              <p class="type-indicator" v-if="!item.metadata.isPaired">
+                {{ item.metadata.type === 'mistake' ? '错题' : '答案' }}
+              </p>
+              <p class="type-indicator is-paired" v-else>
+                已配对
+              </p>
             </div>
           </div>
         </div>
@@ -290,32 +313,9 @@ const toggleAnswer = () => {
     </el-skeleton>
   </div>
 
-  <!-- 添加预览弹窗 -->
-  <el-dialog
-    v-model="previewVisible"
-    :title="previewItem?.metadata?.type === 'mistake' ? '错题详情' : '答案详情'"
-    width="80%"
-    :before-close="handleClosePreview"
-    class="preview-dialog"
-  >
-    <div class="preview-container" v-if="previewItem">
-      <el-image 
-        :src="previewItem.preview"
-        :preview-src-list="[previewItem.preview]"
-        fit="contain"
-        class="preview-detail-image"
-      />
-      <div class="preview-info">
-        <p class="preview-filename">{{ previewItem.originalFileName }}</p>
-        <p class="preview-type">{{ previewItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
-      </div>
-    </div>
-  </el-dialog>
-
-  <!-- 添加详情弹窗 -->
   <el-dialog
     v-model="dialogVisible"
-    :title="activeItem?.metadata.type === 'mistake' ? '错题详情' : '答案详情'"
+    :title="activeItem?.metadata?.type === 'mistake' ? '错题详情' : '答案详情'"
     width="80%"
     :before-close="handleCloseDialog"
     class="mistake-detail-dialog"
@@ -330,11 +330,11 @@ const toggleAnswer = () => {
         />
         <div class="detail-info">
           <p class="detail-filename">{{ activeItem.originalFileName }}</p>
-          <p class="detail-type">{{ activeItem.metadata.type === 'mistake' ? '错题' : '答案' }}</p>
+          <p class="detail-type">{{ activeItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
         </div>
       </div>
       
-      <div class="answer-control">
+      <div class="answer-control" v-if="activeItem.metadata?.isPaired">
         <el-button 
           type="primary" 
           @click="toggleAnswer"
@@ -344,17 +344,40 @@ const toggleAnswer = () => {
         </el-button>
       </div>
       
-      <div class="answer-section" v-if="showAnswer && activeItem.metadata.pairedWith">
-        <el-image 
-          :src="activeItem.metadata.pairedWith.preview"
-          :preview-src-list="[activeItem.metadata.pairedWith.preview]"
-          fit="contain"
-          class="detail-image"
-        />
-        <div class="detail-info">
-          <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
-          <p class="detail-type">答案</p>
-        </div>
+      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
+        <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
+        <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
+          <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
+               :key="answer.fileId"
+               class="answer-item"
+          >
+            <h3 class="answer-title">答案 {{ index + 1 }}</h3>
+            <el-image 
+              :src="answer.preview"
+              :preview-src-list="[answer.preview]"
+              fit="contain"
+              class="detail-image"
+            />
+            <div class="detail-info">
+              <p class="detail-filename">{{ answer.originalFileName }}</p>
+              <p class="detail-type">答案</p>
+            </div>
+          </div>
+        </template>
+        
+        <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
+        <template v-else>
+          <el-image 
+            :src="activeItem.metadata.pairedWith.preview"
+            :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+            fit="contain"
+            class="detail-image"
+          />
+          <div class="detail-info">
+            <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
+            <p class="detail-type">答案</p>
+          </div>
+        </template>
       </div>
     </div>
   </el-dialog>
@@ -568,155 +591,43 @@ const toggleAnswer = () => {
   border-style: dashed;
 }
 
-.mistake-detail-dialog :deep(.el-dialog__body) {
-  padding: 20px;
-}
-
-.detail-container {
+/* 添加确认按钮区域样式 */
+.confirm-area {
   display: flex;
-  gap: 20px;
-  justify-content: space-between;
+  justify-content: center;
+  padding: 20px;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  margin-bottom: 20px;
 }
 
-.mistake-section,
 .answer-section {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.answer-item {
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 15px;
+  background: #f8f9fa;
+}
+
+.answer-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #606266;
 }
 
 .detail-image {
   width: 100%;
-  height: 70vh;
+  max-height: 400px;
   object-fit: contain;
-  border-radius: 8px;
-  background-color: #f5f7fa;
-}
-
-.detail-info {
-  padding: 12px;
-  background-color: #f5f7fa;
-  border-radius: 8px;
-}
-
-.detail-filename {
-  font-size: 16px;
-  margin-bottom: 8px;
-}
-
-.detail-type {
-  font-size: 14px;
-  color: #909399;
-}
-
-.preview-item.is-paired .preview-image {
-  cursor: pointer;
-}
-
-.preview-item:not(.is-paired) .preview-image {
-  cursor: zoom-in;
-}
-
-.preview-dialog :deep(.el-dialog__body) {
-  padding: 20px;
-}
-
-.preview-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.preview-detail-image {
-  width: 100%;
-  height: 70vh;
-  object-fit: contain;
-  border-radius: 8px;
-  background-color: #f5f7fa;
-}
-
-.preview-info {
-  padding: 12px;
-  background-color: #f5f7fa;
-  border-radius: 8px;
-}
-
-.preview-filename {
-  font-size: 16px;
-  margin-bottom: 8px;
-}
-
-.preview-type {
-  font-size: 14px;
-  color: #909399;
-}
-
-.answer-control {
-  display: flex;
-  justify-content: center;
-  padding: 16px 0;
-  border-top: 1px solid var(--el-border-color-lighter);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  margin: 16px 0;
-}
-
-.detail-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.answer-section {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.mistake-detail-dialog {
-  .detail-container {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .mistake-section {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .detail-image {
-    width: 100%;
-    max-height: 70vh;
-    object-fit: contain;
-  }
-
-  .detail-info {
-    padding: 10px;
-    background: #f5f7fa;
-    border-radius: 4px;
-
-    .detail-filename {
-      margin: 0;
-      font-size: 14px;
-      color: #606266;
-    }
-
-    .detail-type {
-      margin: 5px 0 0;
-      font-size: 12px;
-      color: #909399;
-    }
-  }
 }
 </style>

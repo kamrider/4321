@@ -31,7 +31,7 @@ onMounted(async () => {
       error.value = result.error || '加载训练内容失败'
     }
   } catch (error) {
-    console.error('加载训练内��失败:', error)
+    console.error('加载训练内容失败:', error)
     error.value = '加载训练内容失败'
   } finally {
     loading.value = false
@@ -273,16 +273,39 @@ const toggleAnswer = () => {
       </div>
       
       <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
-        <el-image 
-          :src="activeItem.metadata.pairedWith.preview"
-          :preview-src-list="[activeItem.metadata.pairedWith.preview]"
-          fit="contain"
-          class="detail-image"
-        />
-        <div class="detail-info">
-          <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
-          <p class="detail-type">答案</p>
-        </div>
+        <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
+        <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
+          <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
+               :key="answer.fileId"
+               class="answer-item"
+          >
+            <h3 class="answer-title">答案 {{ index + 1 }}</h3>
+            <el-image 
+              :src="answer.preview"
+              :preview-src-list="[answer.preview]"
+              fit="contain"
+              class="detail-image"
+            />
+            <div class="detail-info">
+              <p class="detail-filename">{{ answer.originalFileName }}</p>
+              <p class="detail-type">答案</p>
+            </div>
+          </div>
+        </template>
+        
+        <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
+        <template v-else>
+          <el-image 
+            :src="activeItem.metadata.pairedWith.preview"
+            :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+            fit="contain"
+            class="detail-image"
+          />
+          <div class="detail-info">
+            <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
+            <p class="detail-type">答案</p>
+          </div>
+        </template>
       </div>
     </div>
   </el-dialog>
@@ -481,5 +504,31 @@ const toggleAnswer = () => {
 .detail-type {
   font-size: 14px;
   color: #909399;
+}
+
+.answer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.answer-item {
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 15px;
+  background: #f8f9fa;
+}
+
+.answer-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #606266;
+}
+
+.detail-image {
+  width: 100%;
+  max-height: 400px;
+  object-fit: contain;
 }
 </style> 

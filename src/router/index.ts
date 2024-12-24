@@ -31,6 +31,11 @@ const router = createRouter({
     {
       path: '/:pathMatch(.*)*',
       component: NotFound
+    },
+    {
+      path: '/pair-mistake',
+      name: 'PairMistake',
+      component: () => import('../components/PairMistake.vue')
     }
   ]
 })

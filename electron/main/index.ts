@@ -427,7 +427,10 @@ ipcMain.handle('file:get-mistakes', async () => {
               subject: file.subject || '',
               tags: file.tags || [],
               notes: file.notes || '',
-              trainingRecords: file.trainingRecords || []
+              trainingRecords: file.trainingRecords || [],
+              type: file.type || 'mistake',
+              pairId: file.pairId || null,
+              isPaired: file.isPaired || false
             }
           };
         } catch (error) {
@@ -531,5 +534,41 @@ ipcMain.handle('training:get-next', async (event, fileId: string) => {
       success: false,
       error: error.message
     }
+  }
+})
+
+// 更新图片类型
+ipcMain.handle('metadata:update-type', async (_, fileId: string, type: 'mistake' | 'answer') => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    if (metadata.files[fileId]) {
+      metadata.files[fileId].type = type
+      await metadataManager.saveMetadata(metadata)
+      return { success: true }
+    }
+    return { success: false, error: '文件不存在' }
+  } catch (error) {
+    console.error('更新类型失败:', error)
+    return { success: false, error: '更新类型失败' }
+  }
+})
+
+// 配对图片
+ipcMain.handle('metadata:pair-images', async (_, fileId1: string, fileId2: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    if (metadata.files[fileId1] && metadata.files[fileId2]) {
+      const pairId = `pair_${Date.now()}`
+      metadata.files[fileId1].pairId = pairId
+      metadata.files[fileId2].pairId = pairId
+      metadata.files[fileId1].isPaired = true
+      metadata.files[fileId2].isPaired = true
+      await metadataManager.saveMetadata(metadata)
+      return { success: true }
+    }
+    return { success: false, error: '文件不存在' }
+  } catch (error) {
+    console.error('配对失败:', error)
+    return { success: false, error: '配对失败' }
   }
 })

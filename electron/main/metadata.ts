@@ -52,6 +52,9 @@ export class MetadataManager {
       subject: '',
       tags: ['未分类'],
       trainingRecords: [],
+      type: 'mistake',
+      pairId: null,
+      isPaired: false
     }
   }
 

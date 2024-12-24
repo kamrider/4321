@@ -14,6 +14,9 @@ interface FileItem {
   originalDate?: string
   relativePath?: string  // 添加相对路径
   hash?: string         // 添加文件哈希
+  type?: 'mistake' | 'answer'
+  pairId?: string
+  isPaired?: boolean
 }
 
 const fileList = ref<FileItem[]>([])
@@ -115,7 +118,7 @@ const startUpload = async () => {
           const allCompleted = fileList.value.every(f => f.status === 'completed')
           if (allCompleted) {
             showError('上传成功！', true)
-            router.push('/mistake')
+            router.push('/pair-mistake')
           }
           break
         

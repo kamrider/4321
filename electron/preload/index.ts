@@ -240,7 +240,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       ipcRenderer.invoke('metadata:update-type', fileId, type),
     // 添加 pairImages 方法
     pairImages: (fileId1: string, fileId2: string) => 
-      ipcRenderer.invoke('metadata:pair-images', fileId1, fileId2)
+      ipcRenderer.invoke('metadata:pair-images', fileId1, fileId2),
+    // 添加解绑方法
+    unpairImages: (fileId1: string, fileId2: string) => 
+      ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2)
   }
 })
 

@@ -71,6 +71,24 @@ onMounted(async () => {
 
 const handleDragStart = (item: MistakeItem, event: DragEvent) => {
   draggedItem.value = item
+  
+  // 如果是已配对的项目，创建一个虚拟的分离预览
+  if (item.metadata.isPaired && item.metadata.pairedWith) {
+    const separatedItem = item.metadata.pairedWith
+    const previewElement = document.createElement('div')
+    previewElement.className = 'preview-item is-separating'
+    previewElement.style.opacity = '0.6'
+    previewElement.style.border = '2px dashed #E6A23C'
+    document.body.appendChild(previewElement)
+    
+    // 清理函数
+    const cleanup = () => {
+      document.body.removeChild(previewElement)
+      window.removeEventListener('dragend', cleanup)
+    }
+    window.addEventListener('dragend', cleanup)
+  }
+  
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
   }
@@ -80,24 +98,15 @@ const handleDragOver = (item: MistakeItem, event: DragEvent) => {
   event.preventDefault()
   if (!draggedItem.value || draggedItem.value === item) return
   
-  // 如果拖拽项或目标项已配对，则不允许配对
-  if (draggedItem.value.metadata.isPaired || item.metadata.isPaired) {
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'none'
-    }
-    return
-  }
-  
   dragOverItem.value = item
-  const canPair = draggedItem.value.metadata.type !== item.metadata.type
   
   if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = canPair ? 'link' : 'move'
+    event.dataTransfer.dropEffect = 'move'
   }
 }
 
 const handleDragEnd = () => {
-  if (!draggedItem.value || !dragOverItem.value) {
+  if (!draggedItem.value) {
     draggedItem.value = null
     dragOverItem.value = null
     return
@@ -106,15 +115,27 @@ const handleDragEnd = () => {
   const sourceItem = draggedItem.value
   const targetItem = dragOverItem.value
 
-  if (sourceItem.metadata.type === targetItem.metadata.type) {
+  if (sourceItem.metadata.isPaired) {
+    // ��果是已配对项目，执行分离操作
+    if (!targetItem) {
+      // 拖到空白处，执行分离
+      unpairItems(sourceItem)
+    } else if (targetItem.metadata.isPaired) {
+      // 拖到另一个配对项，交换位置
+      const sourceIndex = mistakeList.value.indexOf(sourceItem)
+      const targetIndex = mistakeList.value.indexOf(targetItem)
+      mistakeList.value.splice(sourceIndex, 1)
+      mistakeList.value.splice(targetIndex, 0, sourceItem)
+    }
+  } else if (targetItem && sourceItem.metadata.type !== targetItem.metadata.type) {
+    // 未配对项目，尝试配对
+    pairItems(sourceItem, targetItem)
+  } else if (targetItem) {
     // 相同类型，交换位置
     const sourceIndex = mistakeList.value.indexOf(sourceItem)
     const targetIndex = mistakeList.value.indexOf(targetItem)
     mistakeList.value.splice(sourceIndex, 1)
     mistakeList.value.splice(targetIndex, 0, sourceItem)
-  } else {
-    // 不同类型，试配对
-    pairItems(sourceItem, targetItem)
   }
 
   draggedItem.value = null
@@ -141,6 +162,39 @@ const pairItems = async (item1: MistakeItem, item2: MistakeItem) => {
     
   } catch (error) {
     ElMessage.error('配对失败')
+  }
+}
+
+// 添加解绑函数
+const unpairItems = async (item: MistakeItem) => {
+  if (!item.metadata.pairedWith) return
+  
+  try {
+    // 完整调用解绑 API
+    await window.ipcRenderer.metadata.unpairImages(item.fileId, item.metadata.pairedWith.fileId)
+    
+    // 获取配对项
+    const pairedItem = item.metadata.pairedWith
+    
+    // 重置两个项目的状态
+    item.metadata.isPaired = false
+    item.metadata.pairId = null
+    item.metadata.pairedWith = null
+    
+    if (pairedItem) {
+      pairedItem.metadata.isPaired = false
+      pairedItem.metadata.pairId = null
+      pairedItem.metadata.pairedWith = null
+      
+      // 将答案项添加回列表的适当位置
+      const mistakeIndex = mistakeList.value.indexOf(item)
+      mistakeList.value.splice(mistakeIndex + 1, 0, pairedItem)
+    }
+    
+    ElMessage.success('解绑成功')
+  } catch (error) {
+    console.error('解绑失败:', error)
+    ElMessage.error('解绑失败，请重试')
   }
 }
 
@@ -178,7 +232,7 @@ const toggleImageType = async (item: MistakeItem) => {
                            draggedItem.metadata.type === item.metadata.type,
                  'is-paired': item.metadata.isPaired
                }"
-               :draggable="!item.metadata.isPaired"
+               :draggable="true"
                @dragstart="handleDragStart(item, $event)"
                @dragover="handleDragOver(item, $event)"
                @dragend="handleDragEnd">
@@ -283,7 +337,7 @@ const toggleImageType = async (item: MistakeItem) => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* 响应式布局调整 */
+/* 响应式布��调整 */
 @media screen and (max-width: 768px) {
   .preview-area {
     grid-template-columns: 1fr;
@@ -327,8 +381,12 @@ const toggleImageType = async (item: MistakeItem) => {
 .preview-item.is-paired {
   border-color: #E6A23C;
   background-color: #fdf6ec;
-  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.2);
-  transform: rotate(2deg) translateY(-5px);
+  cursor: grab;
+  opacity: 1;
+}
+
+.preview-item.is-paired:active {
+  cursor: grabbing;
 }
 
 .preview-item.is-paired::after {
@@ -356,7 +414,7 @@ const toggleImageType = async (item: MistakeItem) => {
 /* 确保所有卡片高度一致 */
 .preview-item {
   height: 450px;  /* 设置固定高度 */
-  min-height: unset;  /* 移除最小高度限制 */
+  min-height: unset;  /* 除最小高度限制 */
 }
 
 .preview-image {
@@ -375,5 +433,36 @@ const toggleImageType = async (item: MistakeItem) => {
 .type-indicator.is-paired {
   background-color: #faecd8;
   color: #E6A23C;
+}
+
+.preview-item.is-separating {
+  position: absolute;
+  pointer-events: none;
+  background-color: #fdf6ec;
+  border: 2px dashed #E6A23C !important;
+  opacity: 0.6;
+  z-index: 1000;
+  width: 280px;
+  height: 450px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.2);
+}
+
+.preview-item.is-paired {
+  position: relative;
+  cursor: grab;
+}
+
+.preview-item.is-paired:active {
+  cursor: grabbing;
+}
+
+.preview-item.is-paired.dragging {
+  opacity: 0.8;
+  transform: scale(0.95);
+}
+
+.preview-item.is-paired.dragging::after {
+  border-style: dashed;
 }
 </style>

@@ -572,3 +572,36 @@ ipcMain.handle('metadata:pair-images', async (_, fileId1: string, fileId2: strin
     return { success: false, error: '配对失败' }
   }
 })
+
+// 添加在其他 IPC 处理程序旁边
+ipcMain.handle('metadata:unpair-images', async (event, fileId1: string, fileId2: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    const file1 = metadata.files[fileId1]
+    const file2 = metadata.files[fileId2]
+    
+    if (!file1 || !file2) {
+      throw new Error('文件不存在')
+    }
+
+    // 重置配对状态
+    file1.isPaired = false
+    file1.pairId = null
+    file2.isPaired = false
+    file2.pairId = null
+
+    // 保存更改
+    await metadataManager.saveMetadata()
+
+    return {
+      success: true,
+      message: '解绑成功'
+    }
+  } catch (error) {
+    console.error('解绑失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})

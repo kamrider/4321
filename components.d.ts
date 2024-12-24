@@ -31,6 +31,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     Settings: typeof import('./src/components/Settings.vue')['default']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
+    Training: typeof import('./src/components/Training.vue')['default']
     UploadMistake: typeof import('./src/components/UploadMistake.vue')['default']
   }
 }

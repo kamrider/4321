@@ -7,6 +7,11 @@ const historyList = ref<HistoryItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
+// 添加预览相关的响应式变量
+const dialogVisible = ref(false)
+const activeItem = ref<HistoryItem | null>(null)
+const showAnswer = ref(false)
+
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.uploadFile.getMistakes()
@@ -26,7 +31,7 @@ onMounted(async () => {
       error.value = result.error || '加载训练内容失败'
     }
   } catch (error) {
-    console.error('加载训练内容失败:', error)
+    console.error('加载训练内��失败:', error)
     error.value = '加载训练内容失败'
   } finally {
     loading.value = false
@@ -148,6 +153,24 @@ const submitTraining = async (fileId: string, success: boolean) => {
     ElMessage.error('提交训练结果失败')
   }
 }
+
+// 添加预览处理函数
+const handleViewDetail = (item: HistoryItem) => {
+  activeItem.value = item
+  dialogVisible.value = true
+}
+
+// 添加关闭预览处理函数
+const handleCloseDialog = () => {
+  dialogVisible.value = false
+  activeItem.value = null
+  showAnswer.value = false
+}
+
+// 添加切换答案显示的函数
+const toggleAnswer = () => {
+  showAnswer.value = !showAnswer.value
+}
 </script>
 
 <template>
@@ -159,12 +182,18 @@ const submitTraining = async (fileId: string, success: boolean) => {
         <div class="preview-area">
           <div v-for="item in historyList" 
                :key="item.fileId" 
-               class="preview-item">
+               class="preview-item"
+               :class="{
+                 'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
+                 'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
+                 'is-paired': item.metadata?.isPaired
+               }">
             <el-image 
               :src="item.preview" 
-              :preview-src-list="[item.preview]"
+              :preview-src-list="[]"
               fit="contain"
               class="preview-image"
+              @click.stop="handleViewDetail(item)"
             />
             <div class="file-info">
               <p class="file-name">{{ item.originalFileName }}</p>
@@ -210,6 +239,53 @@ const submitTraining = async (fileId: string, success: boolean) => {
       </template>
     </el-skeleton>
   </div>
+  
+  <!-- 添加详情弹窗 -->
+  <el-dialog
+    v-model="dialogVisible"
+    :title="activeItem?.metadata?.type === 'mistake' ? '错题详情' : '答案详情'"
+    width="80%"
+    :before-close="handleCloseDialog"
+    class="mistake-detail-dialog"
+  >
+    <div class="detail-container" v-if="activeItem">
+      <div class="mistake-section">
+        <el-image 
+          :src="activeItem.preview"
+          :preview-src-list="[activeItem.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeItem.originalFileName }}</p>
+          <p class="detail-type">{{ activeItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
+        </div>
+      </div>
+      
+      <div class="answer-control" v-if="activeItem.metadata?.isPaired">
+        <el-button 
+          type="primary" 
+          @click="toggleAnswer"
+          :icon="showAnswer ? 'Hide' : 'View'"
+        >
+          {{ showAnswer ? '隐藏答案' : '查看答案' }}
+        </el-button>
+      </div>
+      
+      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
+        <el-image 
+          :src="activeItem.metadata.pairedWith.preview"
+          :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
+          <p class="detail-type">答案</p>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -345,5 +421,65 @@ const submitTraining = async (fileId: string, success: boolean) => {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* 添加颜色样式 */
+.preview-item.is-mistake {
+  border-color: var(--el-color-danger);
+  background-color: var(--el-color-danger-light-7);
+}
+
+.preview-item.is-answer {
+  border-color: var(--el-color-success);
+  background-color: var(--el-color-success-light-7);
+}
+
+.preview-item.is-paired {
+  border-color: #E6A23C;
+  background-color: #fdf6ec;
+}
+
+/* 添加详情弹窗相关样式 */
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.answer-control {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin: 16px 0;
+}
+
+.detail-image {
+  width: 100%;
+  height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f5f7fa;
+}
+
+.detail-info {
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.detail-filename {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.detail-type {
+  font-size: 14px;
+  color: #909399;
 }
 </style> 

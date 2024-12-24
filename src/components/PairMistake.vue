@@ -11,6 +11,8 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const draggedItem = ref<MistakeItem | null>(null)
 const dragOverItem = ref<MistakeItem | null>(null)
+const dialogVisible = ref(false)
+const activeItem = ref<MistakeItem | null>(null)
 
 onMounted(async () => {
   try {
@@ -63,7 +65,7 @@ onMounted(async () => {
     }
   } catch (err) {
     console.error('加载图片失败:', err)
-    error.value = '加载图片失败'
+    error.value = '加载图片失��'
   } finally {
     loading.value = false
   }
@@ -116,7 +118,7 @@ const handleDragEnd = () => {
   const targetItem = dragOverItem.value
 
   if (sourceItem.metadata.isPaired) {
-    // ��果是已配对项目，执行分离操作
+    // 果是已配对项目，执行分离操作
     if (!targetItem) {
       // 拖到空白处，执行分离
       unpairItems(sourceItem)
@@ -193,7 +195,7 @@ const unpairItems = async (item: MistakeItem) => {
     
     ElMessage.success('解绑成功')
   } catch (error) {
-    console.error('解绑失败:', error)
+    console.error('��绑失败:', error)
     ElMessage.error('解绑失败，请重试')
   }
 }
@@ -208,6 +210,20 @@ const toggleImageType = async (item: MistakeItem) => {
   } catch (error) {
     ElMessage.error('设置失败')
   }
+}
+
+// 添加查看详情的处理函数
+const handleViewDetail = (item: MistakeItem) => {
+  if (item.metadata.isPaired) {
+    activeItem.value = item
+    dialogVisible.value = true
+  }
+}
+
+// 添加关闭弹窗的处理函数
+const handleCloseDialog = () => {
+  dialogVisible.value = false
+  activeItem.value = null
 }
 </script>
 
@@ -233,14 +249,16 @@ const toggleImageType = async (item: MistakeItem) => {
                  'is-paired': item.metadata.isPaired
                }"
                :draggable="true"
+               @click="item.metadata.isPaired ? handleViewDetail(item) : null"
                @dragstart="handleDragStart(item, $event)"
                @dragover="handleDragOver(item, $event)"
                @dragend="handleDragEnd">
             <el-image 
               :src="item.preview" 
-              :preview-src-list="[item.preview]"
+              :preview-src-list="item.metadata.isPaired ? [] : [item.preview]"
               fit="contain"
               class="preview-image"
+              @click.stop="item.metadata.isPaired ? handleViewDetail(item) : null"
             />
             <div class="file-info" @click="!item.metadata.isPaired && toggleImageType(item)">
               <p class="file-name">{{ item.originalFileName }}</p>
@@ -256,6 +274,43 @@ const toggleImageType = async (item: MistakeItem) => {
       </template>
     </el-skeleton>
   </div>
+
+  <!-- 添加详情弹窗 -->
+  <el-dialog
+    v-model="dialogVisible"
+    :title="activeItem?.metadata.type === 'mistake' ? '错题详情' : '答案详情'"
+    width="80%"
+    :before-close="handleCloseDialog"
+    class="mistake-detail-dialog"
+  >
+    <div class="detail-container" v-if="activeItem">
+      <div class="mistake-section">
+        <el-image 
+          :src="activeItem.preview"
+          :preview-src-list="[activeItem.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeItem.originalFileName }}</p>
+          <p class="detail-type">{{ activeItem.metadata.type === 'mistake' ? '错题' : '答案' }}</p>
+        </div>
+      </div>
+      
+      <div class="answer-section" v-if="activeItem.metadata.pairedWith">
+        <el-image 
+          :src="activeItem.metadata.pairedWith.preview"
+          :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
+          <p class="detail-type">{{ activeItem.metadata.pairedWith.metadata.type === 'mistake' ? '错题' : '答案' }}</p>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -337,7 +392,7 @@ const toggleImageType = async (item: MistakeItem) => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* 响应式布��调整 */
+/* 响应式布局调整 */
 @media screen and (max-width: 768px) {
   .preview-area {
     grid-template-columns: 1fr;
@@ -464,5 +519,55 @@ const toggleImageType = async (item: MistakeItem) => {
 
 .preview-item.is-paired.dragging::after {
   border-style: dashed;
+}
+
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.detail-container {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.mistake-section,
+.answer-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-image {
+  width: 100%;
+  height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f5f7fa;
+}
+
+.detail-info {
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.detail-filename {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.detail-type {
+  font-size: 14px;
+  color: #909399;
+}
+
+.preview-item.is-paired .preview-image {
+  cursor: pointer;
+}
+
+.preview-item:not(.is-paired) .preview-image {
+  cursor: zoom-in;
 }
 </style>

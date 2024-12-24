@@ -6,17 +6,53 @@ const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
+// 添加新的状态
+const dialogVisible = ref(false)
+const activeItem = ref<MistakeItem | null>(null)
+const showAnswer = ref(false)
+
+// 添加查看详情处理函数
+const handleViewDetail = (item: MistakeItem) => {
+  if (item.metadata?.isPaired) {
+    activeItem.value = item
+    dialogVisible.value = true
+  }
+}
+
+// 添加关闭弹窗处理函数
+const handleCloseDialog = () => {
+  dialogVisible.value = false
+  activeItem.value = null
+  showAnswer.value = false
+}
+
+// 添加切换答案显示的函数
+const toggleAnswer = () => {
+  showAnswer.value = !showAnswer.value
+}
+
+// 修改获取数据的过滤逻辑
 onMounted(async () => {
   try {
-    const result = await window.ipcRenderer.uploadFile.getMistakes()
-    if (result.success) {
-      mistakeList.value = result.data
-    } else {
-      error.value = result.error || '加载错题失败'
+    const result = await window.ipcRenderer.mistake.getMistakes()
+    if (result.success && result.data) {
+      // 过滤掉没有元数据的项目
+      mistakeList.value = result.data.filter(item => {
+        // 必须有metadata
+        if (!item.metadata) return false
+        
+        // 如果是配对项，只显示错题
+        if (item.metadata.isPaired) {
+          return item.metadata.type === 'mistake'
+        }
+        
+        // 未配对项，显示所有有类型的项目
+        return item.metadata.type === 'mistake' || item.metadata.type === 'answer'
+      })
     }
-  } catch (error) {
-    console.error('加载错题失败:', error)
-    error.value = '加载错题失败'
+  } catch (err) {
+    console.error('加载失败:', err)
+    error.value = '加载失败'
   } finally {
     loading.value = false
   }
@@ -94,12 +130,19 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
         <div class="preview-area">
           <div v-for="item in mistakeList" 
                :key="item.fileId" 
-               class="preview-item">
+               class="preview-item"
+               :class="{
+                 'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
+                 'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
+                 'is-paired': item.metadata?.isPaired
+               }"
+               @click="item.metadata?.isPaired ? handleViewDetail(item) : null">
             <el-image 
               :src="item.preview" 
-              :preview-src-list="[item.preview]"
+              :preview-src-list="item.metadata?.isPaired ? [] : [item.preview]"
               fit="contain"
               class="preview-image"
+              @click.stop="item.metadata?.isPaired ? handleViewDetail(item) : null"
             />
             <div class="file-info">
               <p class="file-name">{{ item.originalFileName }}</p>
@@ -127,6 +170,53 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
       </template>
     </el-skeleton>
   </div>
+
+  <!-- 添加详情弹窗 -->
+  <el-dialog
+    v-model="dialogVisible"
+    :title="activeItem?.metadata?.type === 'mistake' ? '错题详情' : '答案详情'"
+    width="80%"
+    :before-close="handleCloseDialog"
+    class="mistake-detail-dialog"
+  >
+    <div class="detail-container" v-if="activeItem">
+      <div class="mistake-section">
+        <el-image 
+          :src="activeItem.preview"
+          :preview-src-list="[activeItem.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeItem.originalFileName }}</p>
+          <p class="detail-type">{{ activeItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
+        </div>
+      </div>
+      
+      <div class="answer-control" v-if="activeItem.metadata?.isPaired">
+        <el-button 
+          type="primary" 
+          @click="toggleAnswer"
+          :icon="showAnswer ? 'Hide' : 'View'"
+        >
+          {{ showAnswer ? '隐藏答案' : '查看答案' }}
+        </el-button>
+      </div>
+      
+      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
+        <el-image 
+          :src="activeItem.metadata.pairedWith.preview"
+          :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
+          <p class="detail-type">答案</p>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -255,5 +345,58 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
 .training-status.overdue {
   background-color: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
+}
+
+/* 添加新的样式，参考 PairMistake.vue 的样式 */
+.preview-item.is-mistake {
+  border-color: var(--el-color-danger);
+  background-color: var(--el-color-danger-light-7);
+}
+
+.preview-item.is-answer {
+  border-color: var(--el-color-success);
+  background-color: var(--el-color-success-light-7);
+}
+
+.preview-item.is-paired {
+  border-color: #E6A23C;
+  background-color: #fdf6ec;
+  cursor: pointer;
+}
+
+.preview-item.is-paired .preview-image {
+  cursor: pointer;
+}
+
+.preview-item:not(.is-paired) .preview-image {
+  cursor: zoom-in;
+}
+
+/* 添加详情弹窗相关样式 */
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.answer-control {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin: 16px 0;
+}
+
+.detail-image {
+  width: 100%;
+  height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f5f7fa;
 }
 </style> 

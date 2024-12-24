@@ -13,6 +13,9 @@ const draggedItem = ref<MistakeItem | null>(null)
 const dragOverItem = ref<MistakeItem | null>(null)
 const dialogVisible = ref(false)
 const activeItem = ref<MistakeItem | null>(null)
+const previewVisible = ref(false)
+const previewItem = ref<MistakeItem | null>(null)
+const showAnswer = ref(false)
 
 onMounted(async () => {
   try {
@@ -65,7 +68,7 @@ onMounted(async () => {
     }
   } catch (err) {
     console.error('加载图片失败:', err)
-    error.value = '加载图片失��'
+    error.value = '加载图片失败'
   } finally {
     loading.value = false
   }
@@ -195,7 +198,7 @@ const unpairItems = async (item: MistakeItem) => {
     
     ElMessage.success('解绑成功')
   } catch (error) {
-    console.error('��绑失败:', error)
+    console.error('解绑失败:', error)
     ElMessage.error('解绑失败，请重试')
   }
 }
@@ -224,6 +227,24 @@ const handleViewDetail = (item: MistakeItem) => {
 const handleCloseDialog = () => {
   dialogVisible.value = false
   activeItem.value = null
+  showAnswer.value = false
+}
+
+// 添加预览处理函数
+const handlePreview = (item: MistakeItem) => {
+  previewItem.value = item
+  previewVisible.value = true
+}
+
+// 添加关闭预览处理函数
+const handleClosePreview = () => {
+  previewVisible.value = false
+  previewItem.value = null
+}
+
+// 添加切换答案显示的函数
+const toggleAnswer = () => {
+  showAnswer.value = !showAnswer.value
 }
 </script>
 
@@ -255,10 +276,10 @@ const handleCloseDialog = () => {
                @dragend="handleDragEnd">
             <el-image 
               :src="item.preview" 
-              :preview-src-list="item.metadata.isPaired ? [] : [item.preview]"
+              :preview-src-list="[]"
               fit="contain"
               class="preview-image"
-              @click.stop="item.metadata.isPaired ? handleViewDetail(item) : null"
+              @click.stop="item.metadata.isPaired ? handleViewDetail(item) : handlePreview(item)"
             />
             <div class="file-info" @click="!item.metadata.isPaired && toggleImageType(item)">
               <p class="file-name">{{ item.originalFileName }}</p>
@@ -274,6 +295,30 @@ const handleCloseDialog = () => {
       </template>
     </el-skeleton>
   </div>
+
+  <!-- 添加预览弹窗 -->
+  <el-dialog
+    v-model="previewVisible"
+    :title="previewItem?.metadata.type === 'mistake' ? '错题预览' : '答案预览'"
+    width="80%"
+    :before-close="handleClosePreview"
+    class="preview-dialog"
+  >
+    <div class="preview-container" v-if="previewItem">
+      <el-image 
+        :src="previewItem.preview"
+        :preview-src-list="[previewItem.preview]"
+        fit="contain"
+        class="preview-detail-image"
+      />
+      <div class="preview-info">
+        <p class="preview-filename">{{ previewItem.originalFileName }}</p>
+        <p class="preview-type">
+          {{ previewItem.metadata.type === 'mistake' ? '错题' : '答案' }}
+        </p>
+      </div>
+    </div>
+  </el-dialog>
 
   <!-- 添加详情弹窗 -->
   <el-dialog
@@ -297,7 +342,17 @@ const handleCloseDialog = () => {
         </div>
       </div>
       
-      <div class="answer-section" v-if="activeItem.metadata.pairedWith">
+      <div class="answer-control">
+        <el-button 
+          type="primary" 
+          @click="toggleAnswer"
+          :icon="showAnswer ? 'Hide' : 'View'"
+        >
+          {{ showAnswer ? '隐藏答案' : '查看答案' }}
+        </el-button>
+      </div>
+      
+      <div class="answer-section" v-if="showAnswer && activeItem.metadata.pairedWith">
         <el-image 
           :src="activeItem.metadata.pairedWith.preview"
           :preview-src-list="[activeItem.metadata.pairedWith.preview]"
@@ -306,7 +361,7 @@ const handleCloseDialog = () => {
         />
         <div class="detail-info">
           <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
-          <p class="detail-type">{{ activeItem.metadata.pairedWith.metadata.type === 'mistake' ? '错题' : '答案' }}</p>
+          <p class="detail-type">答案</p>
         </div>
       </div>
     </div>
@@ -569,5 +624,69 @@ const handleCloseDialog = () => {
 
 .preview-item:not(.is-paired) .preview-image {
   cursor: zoom-in;
+}
+
+.preview-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-detail-image {
+  width: 100%;
+  height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f5f7fa;
+}
+
+.preview-info {
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.preview-filename {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.preview-type {
+  font-size: 14px;
+  color: #909399;
+}
+
+.answer-control {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin: 16px 0;
+}
+
+.detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.answer-section {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

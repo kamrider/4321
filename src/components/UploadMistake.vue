@@ -167,7 +167,7 @@ const startUpload = async () => {
       showError(result.message || '部分文件上传失败')
     }
   } catch (error) {
-    console.error('上传错误详情:', error)
+    console.error('上���错误详情:', error)
     fileList.value.forEach(file => {
       if (file.status === 'uploading') {
         file.status = 'error'
@@ -292,6 +292,22 @@ const formatDate = (dateStr: string) => {
     return dateStr
   }
 }
+
+// 添加预览状态
+const dialogVisible = ref(false)
+const activeFile = ref<FileItem | null>(null)
+
+// 添加查看详情的处理函数
+const handleViewDetail = (file: FileItem) => {
+  activeFile.value = file
+  dialogVisible.value = true
+}
+
+// 添加关闭弹窗的处理函数
+const handleCloseDialog = () => {
+  dialogVisible.value = false
+  activeFile.value = null
+}
 </script>
 
 <template>
@@ -310,12 +326,14 @@ const formatDate = (dateStr: string) => {
         <div v-for="file in fileList" 
              :key="file.path" 
              class="preview-item"
-             :class="{ 'error': file.status === 'error' }">
+             :class="{ 'error': file.status === 'error' }"
+             @click="handleViewDetail(file)">
           <el-image 
             :src="file.preview" 
-            :preview-src-list="[file.preview]"
+            :preview-src-list="[]"
             fit="contain"
             class="preview-image"
+            @click.stop="handleViewDetail(file)"
           />
           <div class="file-info">
             <p class="file-name">{{ file.path.split('/').pop() }}</p>
@@ -364,6 +382,40 @@ const formatDate = (dateStr: string) => {
       </button>
     </div>
   </div>
+
+  <!-- 添加详情弹窗 -->
+  <el-dialog
+    v-model="dialogVisible"
+    title="图片详情"
+    width="80%"
+    :before-close="handleCloseDialog"
+    class="mistake-detail-dialog"
+  >
+    <div class="detail-container" v-if="activeFile">
+      <div class="image-section">
+        <el-image 
+          :src="activeFile.preview"
+          :preview-src-list="[activeFile.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+        <div class="detail-info">
+          <p class="detail-filename">{{ activeFile.path.split('/').pop() }}</p>
+          <template v-if="activeFile.status === 'completed'">
+            <p class="detail-date" v-if="activeFile.uploadDate">
+              上传日期: {{ formatDate(activeFile.uploadDate) }}
+            </p>
+            <p class="detail-date" v-if="activeFile.originalDate">
+              创建日期: {{ formatDate(activeFile.originalDate) }}
+            </p>
+          </template>
+          <p class="detail-status" :class="activeFile.status">
+            状态: {{ activeFile.status }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -598,5 +650,75 @@ const formatDate = (dateStr: string) => {
   font-size: 12px;
   color: #666;
   margin: 4px 0;
+}
+
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.image-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-image {
+  width: 100%;
+  height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f5f7fa;
+}
+
+.detail-info {
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.detail-filename {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.detail-date {
+  font-size: 14px;
+  color: #909399;
+  margin: 4px 0;
+}
+
+.detail-status {
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.detail-status.completed {
+  background-color: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.detail-status.error {
+  background-color: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+}
+
+.detail-status.uploading {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.detail-status.idle {
+  background-color: var(--el-color-info-light-9);
+  color: var(--el-color-info);
 }
 </style>

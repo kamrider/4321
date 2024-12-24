@@ -244,6 +244,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     // 添加解绑方法
     unpairImages: (fileId1: string, fileId2: string) => 
       ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2)
+  },
+
+  mistake: {
+    getMistakes: () => ipcRenderer.invoke('file:get-mistakes')
   }
 })
 
@@ -346,5 +350,21 @@ const validatePath = (path: string): boolean => {
   if (!path || typeof path !== 'string') return false
   // Windows 路径或 Unix 路径
   return path.match(/^([a-zA-Z]:\\|\/)/i) !== null
+}
+
+// 确保类型定义正确
+declare global {
+  interface Window {
+    ipcRenderer: {
+      // ... 其他接口的类型定义
+      mistake: {
+        getMistakes: () => Promise<{
+          success: boolean
+          data: MistakeItem[]
+          error?: string
+        }>
+      }
+    }
+  }
 }
 

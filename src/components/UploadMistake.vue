@@ -117,8 +117,22 @@ const startUpload = async () => {
           // 检查是否所有文件都上传完成
           const allCompleted = fileList.value.every(f => f.status === 'completed')
           if (allCompleted) {
-            showError('上传成功！', true)
-            router.push('/pair-mistake')
+            // 获取已完成上传的文件信息
+            const uploadedFiles = fileList.value
+              .filter(f => f.status === 'completed')
+              .map(f => ({
+                path: f.path,
+                filePath: f.filePath || f.path // 确保至少有一个路径
+              }))
+            
+            console.log('准备存储的上传文件信息:', uploadedFiles)
+            
+            if (uploadedFiles.length > 0) {
+              localStorage.setItem('recentlyUploadedFiles', JSON.stringify(uploadedFiles))
+              router.push('/pair-mistake')
+            } else {
+              ElMessage.warning('没有成功上传的文件')
+            }
           }
           break
         

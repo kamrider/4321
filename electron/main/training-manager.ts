@@ -31,7 +31,6 @@ export class TrainingManager {
   private config: TrainingConfig
 
   constructor(configPath?: string) {
-    // 尝试从配置文件加载，如果失败则使用默认配置
     this.config = this.loadConfig(configPath)
   }
 
@@ -64,20 +63,28 @@ export class TrainingManager {
     return this.getDefaultConfig()
   }
 
-  private validateConfig(config: any): config is TrainingConfig {
-    // 添加配置验证逻辑
+  public validateConfig(config: any): config is TrainingConfig {
     return (
       typeof config === 'object' &&
       config !== null &&
       typeof config.baseAdjustment?.success === 'number' &&
       typeof config.baseAdjustment?.fail === 'number' &&
       Array.isArray(config.timeRules) &&
-      // ... 其他必要的验证
-      true
+      typeof config.intervalMultiplier?.success === 'number' &&
+      typeof config.intervalMultiplier?.fail === 'number' &&
+      typeof config.proficiencyThresholds?.low === 'number' &&
+      typeof config.proficiencyThresholds?.medium === 'number' &&
+      typeof config.proficiencyThresholds?.high === 'number' &&
+      typeof config.intervals?.min === 'number' &&
+      typeof config.intervals?.max === 'number'
     )
   }
 
-  private getDefaultConfig(): TrainingConfig {
+  public updateConfig(newConfig: TrainingConfig): void {
+    this.config = newConfig
+  }
+
+  public getDefaultConfig(): TrainingConfig {
     return {
       baseAdjustment: {
         success: 5,
@@ -132,8 +139,8 @@ export class TrainingManager {
       ? this.config.intervalMultiplier.success
       : this.config.intervalMultiplier.fail
     
-    // 根据熟练度计算额外的调整因子
-    const proficiencyFactor = 1 + Math.pow(1 - currentProficiency / 100, 2.5) * 0.8
+    // 使用分段函数计算调整因子
+    const proficiencyFactor = this.calculateProficiencyFactor(currentProficiency)
     
     // 计算实际间隔（当前日期与上次训练日期之间的天数）
     const lastTraining = new Date(lastTrainingDate)
@@ -236,15 +243,21 @@ export class TrainingManager {
    * @param timeDeviation 时间偏差（天数）
    * @returns 调整因子 (0-1)
    */
-  private calculateProficiencyFactor(timeDeviation: number): number {
-    if (timeDeviation <= 0) {
-      // 按时或提前训练，返回满分调整因子
-      return 1
+  private calculateProficiencyFactor(proficiency: number): number {
+    const { low, medium, high } = this.config.proficiencyThresholds
+
+    if (proficiency < low) {
+      // 低熟练度阶段：缓慢增长
+      return 1 + (1 - proficiency / 100) * 0.2
+    } else if (proficiency < medium) {
+      // 中等熟练度阶段：更缓慢的增长
+      return 1 + (1 - proficiency / 100) * 0.3
+    } else if (proficiency < high) {
+      // 较高熟练度阶段：适中增长
+      return 1 + (1 - proficiency / 100) * 0.4
+    } else {
+      // 高熟练度阶段：较快增长
+      return 1 + Math.pow(1 - proficiency / 100, 2) * 0.5
     }
-    
-    // 延迟训练，根据延迟天数降低调整因子
-    // 每延迟一天降低 10% 的调整因子，最低为 0.2
-    const factor = 1 - (timeDeviation * 0.1)
-    return Math.max(0.2, factor)
   }
 }

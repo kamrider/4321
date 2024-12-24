@@ -7,6 +7,7 @@ import * as fs from 'fs'
 import Store from 'electron-store'
 import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
+import { v4 as uuidv4 } from 'uuid'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -34,10 +35,19 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 // Disable GPU Acceleration for Windows 7
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 
-// Set application name for Windows 10+ notifications
-if (process.platform === 'win32') app.setAppUserModelId(app.getName())
+// 根据环境设置不同的应用 ID
+const isDevelopment = process.env.NODE_ENV === 'development'
+const appId = isDevelopment ? 'com.yourapp.id.dev' : 'com.yourapp.id.prod'
 
-if (!app.requestSingleInstanceLock()) {
+// 设置应用 ID
+if (process.platform === 'win32') {
+  app.setAppUserModelId(appId)
+}
+
+// 使用不同的单实例锁
+if (!app.requestSingleInstanceLock({
+  appId: appId
+})) {
   app.quit()
   process.exit(0)
 }
@@ -46,9 +56,16 @@ let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
-// 初始化 store 和默认路径
-const store = new Store()
-const DEFAULT_STORAGE_PATH = path.join(app.getPath('userData'), 'uploads')
+// 初始化 store，根据环境使用不同的配置
+const store = new Store({
+  name: process.env.NODE_ENV === 'development' ? 'config-dev' : 'config'
+})
+
+// 获取默认存储路径，开发环境使用不同目录
+const DEFAULT_STORAGE_PATH = path.join(
+  app.getPath('userData'), 
+  process.env.NODE_ENV === 'development' ? 'uploads-dev' : 'uploads'
+)
 let isCancelled = false
 
 // 获取存储路径，如果不存在则使用默认路径
@@ -85,7 +102,8 @@ const validateFilePaths = (filePaths: string[]) => {
 const metadataManager = new MetadataManager(targetDirectory)
 
 // 初始化训练管理器
-const trainingManager = new TrainingManager('config/training-config.json')
+const configPath = 'config/training-config.json'
+const trainingManager = new TrainingManager(configPath)
 
 // 上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
@@ -386,7 +404,7 @@ ipcMain.handle('file:get-metadata', () => {
 
 ipcMain.handle('file:get-mistakes', async () => {
   try {
-    // 检查存储路径是否存在
+    // ��查存储路径是否存在
     if (!fs.existsSync(targetDirectory)) {
       return {
         success: false,
@@ -402,7 +420,7 @@ ipcMain.handle('file:get-mistakes', async () => {
     // 创建一个 Map 来存储所有文件
     const fileMap = new Map();
     
-    // 第一步：处理所有文件的基���息
+    // 第一步：处理所有文件的基息
     for (const [id, file] of allFiles) {
       try {
         const filePath = path.join(targetDirectory, file.relativePath);
@@ -541,7 +559,7 @@ ipcMain.handle('training:get-next', async (event, fileId: string) => {
   }
 })
 
-// 更新图片类型
+// 更新图片类��
 ipcMain.handle('metadata:update-type', async (_, fileId: string, type: 'mistake' | 'answer') => {
   try {
     const metadata = await metadataManager.getMetadata()
@@ -640,21 +658,59 @@ ipcMain.handle('config:get-training-config', async () => {
 // 更新训练配置
 ipcMain.handle('config:update-training-config', async (_, config: TrainingConfig) => {
   try {
+    console.log('main 进程收到配置更新请求:', config)
+    
     // 验证新配置
-    if (!trainingManager.validateConfig(config)) {
+    const isValid = trainingManager.validateConfig(config)
+    console.log('配置验证结果:', isValid)
+    
+    if (!isValid) {
       throw new Error('配置格式无效')
     }
     
-    // 保存配置到文件
-    const configPath = path.join(app.getPath('userData'), 'training-config.json')
+    // 保存配置到文件，使用相同的相对路径
+    console.log('准备保存配置到:', configPath)
+    
+    // 确保配置目录存在
+    const configDir = path.dirname(configPath)
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true })
+    }
+    
     await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2))
+    console.log('配置文件已保存')
     
     // 更新训练管理器中的配置
     trainingManager.updateConfig(config)
+    console.log('训练管理器配置已更新')
     
     return { success: true }
   } catch (error) {
     console.error('更新训练配置失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 处理粘贴上传
+ipcMain.handle('file:upload-paste', async (_, data: { buffer: ArrayBuffer, type: string }) => {
+  try {
+    // 生成唯一文件名
+    const extension = data.type.split('/')[1] || 'png'
+    const fileName = `${Date.now()}-${uuidv4()}.${extension}`
+    const filePath = path.join(targetDirectory, fileName)
+
+    // 将 ArrayBuffer 转换为 Buffer 并写入文件
+    await fs.promises.writeFile(filePath, Buffer.from(data.buffer))
+
+    return {
+      success: true,
+      filePath
+    }
+  } catch (error) {
+    console.error('粘贴上传失败:', error)
     return {
       success: false,
       error: error.message

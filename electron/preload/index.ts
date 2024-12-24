@@ -83,6 +83,44 @@ interface TrainingNextInfo {
   currentInterval: number
 }
 
+// 在现有的接口定义中添加配置相关的类型
+interface TrainingConfig {
+  baseAdjustment: {
+    success: number
+    fail: number
+  }
+  intervalMultiplier: {
+    success: number
+    fail: number
+  }
+  timeRules: Array<{
+    range: [number, number]
+    bonus: number
+    description: string
+  }>
+  proficiencyThresholds: {
+    low: number
+    medium: number
+    high: number
+  }
+  intervals: {
+    min: number
+    max: number
+  }
+}
+
+// 添加类型定义
+interface UploadAPI {
+  uploadFile: (filePaths: string[]) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  uploadPastedFile: (file: File) => Promise<{
+    success: boolean
+    error?: string
+  }>
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
@@ -207,6 +245,20 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
         throw error
       }
     },
+
+    // 添加粘贴上传方法
+    uploadPastedFile: async (file: File): Promise<{
+      success: boolean
+      error?: string
+    }> => {
+      // 将文件转换为 ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer()
+      // 传递 Buffer 和文件类型
+      return await ipcRenderer.invoke('file:upload-paste', {
+        buffer: arrayBuffer,
+        type: file.type
+      })
+    },
   },
 
   // 添加训练相关方法
@@ -248,6 +300,42 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
   mistake: {
     getMistakes: () => ipcRenderer.invoke('file:get-mistakes')
+  },
+
+  // 在 window.ipcRenderer 中添加配置相关的方法
+  config: {
+    getTrainingConfig: async (): Promise<{
+      success: boolean
+      data?: TrainingConfig
+      error?: string
+    }> => {
+      return await ipcRenderer.invoke('config:get-training-config')
+    },
+    
+    updateTrainingConfig: async (config: TrainingConfig): Promise<{
+      success: boolean
+      error?: string
+    }> => {
+      console.log('preload 接收到配置:', config)
+      const result = await ipcRenderer.invoke('config:update-training-config', config)
+      console.log('preload 收到结果:', result)
+      return result
+    }
+  },
+
+  upload: {
+    uploadFile: async (filePaths: string[]) => {
+      return await ipcRenderer.invoke('file:upload', filePaths)
+    },
+    uploadPastedFile: async (file: File) => {
+      // 将文件转换为 ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer()
+      // 传递 Buffer 和文件类型
+      return await ipcRenderer.invoke('file:upload-paste', {
+        buffer: arrayBuffer,
+        type: file.type
+      })
+    }
   }
 })
 
@@ -364,6 +452,18 @@ declare global {
           error?: string
         }>
       }
+      config: {
+        getTrainingConfig: () => Promise<{
+          success: boolean
+          data?: TrainingConfig
+          error?: string
+        }>
+        updateTrainingConfig: (config: TrainingConfig) => Promise<{
+          success: boolean
+          error?: string
+        }>
+      }
+      upload: UploadAPI
     }
   }
 }

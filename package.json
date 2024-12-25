@@ -51,7 +51,7 @@
     "appId": "com.yourapp.id.prod",
     "productName": "错题训练",
     "directories": {
-      "output": "dist_electron"
+      "output": "release_builds"
     },
     "win": {
       "target": [

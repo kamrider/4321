@@ -404,7 +404,7 @@ ipcMain.handle('file:get-metadata', () => {
 
 ipcMain.handle('file:get-mistakes', async () => {
   try {
-    // ��查存储路径是否存在
+    // ���查存储路径是否存在
     if (!fs.existsSync(targetDirectory)) {
       return {
         success: false,
@@ -559,7 +559,7 @@ ipcMain.handle('training:get-next', async (event, fileId: string) => {
   }
 })
 
-// 更新图片类��
+// 更新图片类
 ipcMain.handle('metadata:update-type', async (_, fileId: string, type: 'mistake' | 'answer') => {
   try {
     const metadata = await metadataManager.getMetadata()
@@ -647,7 +647,7 @@ ipcMain.handle('config:get-training-config', async () => {
       data: trainingManager.getDefaultConfig()
     }
   } catch (error) {
-    console.error('获取训练配置失败:', error)
+    console.error('获取训��配置失败:', error)
     return {
       success: false,
       error: error.message
@@ -695,19 +695,43 @@ ipcMain.handle('config:update-training-config', async (_, config: TrainingConfig
 })
 
 // 处理粘贴上传
-ipcMain.handle('file:upload-paste', async (_, data: { buffer: ArrayBuffer, type: string }) => {
+ipcMain.handle('file:upload-paste', async (event, data: {
+  buffer: ArrayBuffer
+  type: string
+  name: string
+}) => {
   try {
-    // 生成唯一文件名
-    const extension = data.type.split('/')[1] || 'png'
-    const fileName = `${Date.now()}-${uuidv4()}.${extension}`
+    const fileName = `${Date.now()}-${data.name}`
     const filePath = path.join(targetDirectory, fileName)
 
-    // 将 ArrayBuffer 转换为 Buffer 并写入文件
+    // 确保目录存在
+    if (!fs.existsSync(targetDirectory)) {
+      fs.mkdirSync(targetDirectory, { recursive: true })
+    }
+
+    // 写入文件
     await fs.promises.writeFile(filePath, Buffer.from(data.buffer))
+    
+    // 添加元数据并获取文件ID
+    const fileId = await metadataManager.addFile(filePath, filePath)
+
+    // 发送进度信息
+    event.sender.send('file:progress', {
+      filePath,
+      fileId,
+      progress: 100,
+      status: 'completed',
+      fileInfo: {
+        uploadDate: new Date().toISOString(),
+        originalDate: new Date().toISOString()
+      }
+    })
 
     return {
       success: true,
-      filePath
+      filePath,
+      fileId,
+      fileName
     }
   } catch (error) {
     console.error('粘贴上传失败:', error)

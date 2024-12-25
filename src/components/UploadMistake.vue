@@ -78,7 +78,7 @@ const handleFileSelect = async () => {
 }
 
 // 开始上传
-const startUpload = async () => {
+const startUpload = async (shouldRedirect = true) => {
   console.log('开始上传流程...')
   if (fileList.value.length === 0) {
     console.log('没有选择文件,上传终止')
@@ -116,22 +116,17 @@ const startUpload = async () => {
           
           // 检查是否所有文件都上传完成
           const allCompleted = fileList.value.every(f => f.status === 'completed')
-          if (allCompleted) {
-            // 获取已完成上传的文件信息
+          if (allCompleted && shouldRedirect) {
             const uploadedFiles = fileList.value
               .filter(f => f.status === 'completed')
               .map(f => ({
                 path: f.path,
-                filePath: f.filePath || f.path // 确保至少有一个路径
+                filePath: f.filePath || f.path
               }))
-            
-            console.log('准备存储的上传文件信息:', uploadedFiles)
             
             if (uploadedFiles.length > 0) {
               localStorage.setItem('recentlyUploadedFiles', JSON.stringify(uploadedFiles))
               router.push('/pair-mistake')
-            } else {
-              ElMessage.warning('没有成功上传的文件')
             }
           }
           break
@@ -167,7 +162,7 @@ const startUpload = async () => {
       showError(result.message || '部分文件上传失败')
     }
   } catch (error) {
-    console.error('上���错误详情:', error)
+    console.error('上传错误详情:', error)
     fileList.value.forEach(file => {
       if (file.status === 'uploading') {
         file.status = 'error'
@@ -177,7 +172,7 @@ const startUpload = async () => {
   }
 }
 
-// 取消上传
+// 取消上���
 const cancelUpload = async (filePath?: string) => {
   await window.ipcRenderer.uploadFile.cancel(filePath)
   
@@ -216,7 +211,7 @@ const handleFileDrop = async (event: DragEvent) => {
   }
   
   if (addedCount > 0) {
-    await startUpload()
+    await startUpload(false)
   }
 }
 
@@ -308,10 +303,70 @@ const handleCloseDialog = () => {
   dialogVisible.value = false
   activeFile.value = null
 }
+
+// 添加粘贴处理函数
+const handlePaste = async (event: ClipboardEvent) => {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      const clipboardFile = item.getAsFile()
+      if (clipboardFile) {
+        try {
+          const arrayBuffer = await clipboardFile.arrayBuffer()
+          const fileName = `screenshot-${Date.now()}.png`
+          
+          // 使用现有的文件列表逻辑
+          const fileItem: FileItem = {
+            path: fileName,
+            progress: 0,
+            status: 'uploading'
+          }
+          fileList.value.push(fileItem)
+
+          // 上传文件
+          const result = await window.ipcRenderer.uploadFile.uploadPastedFile({
+            buffer: arrayBuffer,
+            type: clipboardFile.type,
+            name: fileName
+          })
+
+          if (result.success) {
+            // ���用现有的预览逻辑
+            const preview = await window.ipcRenderer.uploadFile.getPreview(result.filePath)
+            
+            // 更新文件状态
+            const index = fileList.value.findIndex(f => f.path === fileName)
+            if (index !== -1) {
+              fileList.value[index] = {
+                ...fileList.value[index],
+                path: result.filePath,
+                preview: preview.previewUrl,
+                status: 'completed',
+                progress: 100
+              }
+            }
+            ElMessage.success('粘贴上传成功')
+          } else {
+            const index = fileList.value.findIndex(f => f.path === fileName)
+            if (index !== -1) {
+              fileList.value[index].status = 'error'
+            }
+            ElMessage.error(`粘贴上传失败: ${result.error}`)
+          }
+        } catch (error) {
+          console.error('粘贴上传错误:', error)
+          ElMessage.error('粘贴上传失败')
+        }
+      }
+    }
+  }
+}
 </script>
 
 <template>
-  <div class="upload-container">
+  <div class="upload-container" @paste="handlePaste">
     <div class="drop-zone"
          @dragover.prevent
          @dragleave.prevent

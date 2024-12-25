@@ -247,18 +247,19 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     },
 
     // 添加粘贴上传方法
-    uploadPastedFile: async (file: File): Promise<{
-      success: boolean
-      error?: string
-    }> => {
-      // 将文件转换为 ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer()
-      // 传递 Buffer 和文件类型
-      return await ipcRenderer.invoke('file:upload-paste', {
-        buffer: arrayBuffer,
-        type: file.type
-      })
-    },
+    uploadPastedFile: async (data: {
+      buffer: ArrayBuffer
+      type: string
+      name: string
+    }) => {
+      try {
+        const result = await ipcRenderer.invoke('file:upload-paste', data)
+        return result
+      } catch (error) {
+        console.error('Error uploading pasted file:', error)
+        return { success: false, error }
+      }
+    }
   },
 
   // 添加训练相关方法

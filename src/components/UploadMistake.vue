@@ -130,9 +130,10 @@ const startUpload = async (shouldRedirect = true) => {
           if (allCompleted && shouldRedirect) {
             const uploadedFiles = fileList.value
               .filter(f => f.status === 'completed')
-              .map(f => ({
+              .map((f, index) => ({
                 path: f.targetPath || f.path,
-                fileId: f.fileId
+                fileId: f.fileId,
+                uploadIndex: index  // 添加上传顺序索引
               }))
             
             if (uploadedFiles.length > 0) {

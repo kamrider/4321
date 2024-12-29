@@ -30,12 +30,18 @@ onMounted(async () => {
         return matches && !item.metadata?.isPaired
       })
       
-      console.log('过滤后的文件列表:', mistakeList.value)
+      // 使用 uploadIndex 排序
+      mistakeList.value.sort((a, b) => {
+        const aIndex = uploadedFiles.find(f => f.fileId === a.fileId)?.uploadIndex ?? 0
+        const bIndex = uploadedFiles.find(f => f.fileId === b.fileId)?.uploadIndex ?? 0
+        return aIndex - bIndex
+      })
+      
+      console.log('过滤并排序后的文件列表:', mistakeList.value)
       
       if (mistakeList.value.length > 0) {
-        // 将一半设置为答案类型
-        const halfLength = Math.floor(mistakeList.value.length / 2)
-        for (let i = 0; i < halfLength; i++) {
+        // 将偶数位置的文件设置为答案类型（保持错题-答案交替顺序）
+        for (let i = 1; i < mistakeList.value.length; i += 2) {
           const item = mistakeList.value[i]
           try {
             await window.ipcRenderer.metadata.updateType(item.fileId, 'answer')

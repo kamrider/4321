@@ -1,17 +1,17 @@
 {
-  "name": "electron-vue-vite",
-  "version": "28.1.0",
+  "name": "mistake-trainer",
+  "version": "1.0.0",
   "main": "dist-electron/main/index.js",
-  "description": "Really simple Electron + Vue + Vite boilerplate.",
-  "author": "草鞋没号 <308487730@qq.com>",
+  "description": "错题训练应用",
+  "author": "Your Name",
   "license": "MIT",
   "private": true,
   "keywords": [
     "electron",
-    "rollup",
+    "vue",
     "vite",
-    "vue3",
-    "vue"
+    "错题",
+    "训练"
   ],
   "debug": {
     "env": {

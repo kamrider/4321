@@ -177,32 +177,68 @@ export class MetadataManager {
     const errors: string[] = []
     const oldPath = this.baseDir
     const oldMetadataPath = this.metadataPath
+    const newMetadataPath = path.join(newPath, METADATA_FILE)
 
     try {
       await fs.promises.mkdir(newPath, { recursive: true })
       
-      // 先复制元数据文件到新路径
-      const newMetadataPath = path.join(newPath, METADATA_FILE)
-      await fs.promises.copyFile(oldMetadataPath, newMetadataPath)
+      // 检查新路径是否已经存在 metadata 文件
+      let existingMetadata: MetadataStore | null = null
+      if (fs.existsSync(newMetadataPath)) {
+        try {
+          const existingData = await fs.promises.readFile(newMetadataPath, 'utf-8')
+          existingMetadata = JSON.parse(existingData)
+          console.log('发现目标路径已有 metadata:', existingMetadata)
+        } catch (error) {
+          console.error('读取目标路径 metadata 失败:', error)
+          errors.push(`读取目标路径 metadata 失败: ${error.message}`)
+        }
+      }
       
-      // 开始迁移文件
+      // 如果存在有效的 metadata，合并它
+      if (existingMetadata?.files) {
+        // 合并文件记录
+        for (const [id, file] of Object.entries(existingMetadata.files)) {
+          // 检查文件是否真实存在
+          const filePath = path.join(newPath, file.relativePath)
+          if (fs.existsSync(filePath)) {
+            // 如果文件 ID 已存在，生成新的 ID
+            let newId = id
+            while (this.metadata.files[newId]) {
+              newId = uuidv4()
+            }
+            this.metadata.files[newId] = {
+              ...file,
+              id: newId,
+              relativePath: file.relativePath
+            }
+          }
+        }
+      }
+      
+      // 复制当前文件到新路径
       for (const [id, metadata] of Object.entries(this.metadata.files)) {
         const oldFilePath = path.join(oldPath, metadata.relativePath)
         const newFilePath = path.join(newPath, metadata.relativePath)
         
         try {
+          // 确保目标目录存在
           await fs.promises.mkdir(path.dirname(newFilePath), { recursive: true })
-          await fs.promises.copyFile(oldFilePath, newFilePath)
           
-          // 验证新文件
-          const oldHash = await this.calculateFileHash(oldFilePath)
-          const newHash = await this.calculateFileHash(newFilePath)
-          
-          if (oldHash === newHash) {
-            // 迁移成功，删除旧文件
-            await fs.promises.unlink(oldFilePath)
-          } else {
-            throw new Error('文件验证失败')
+          // 如果文件在源路径存在，才进行复制
+          if (fs.existsSync(oldFilePath)) {
+            await fs.promises.copyFile(oldFilePath, newFilePath)
+            
+            // 验证新文件
+            const oldHash = await this.calculateFileHash(oldFilePath)
+            const newHash = await this.calculateFileHash(newFilePath)
+            
+            if (oldHash === newHash) {
+              // 迁移成功，删除旧文件
+              await fs.promises.unlink(oldFilePath)
+            } else {
+              throw new Error('文件验证失败')
+            }
           }
         } catch (error) {
           errors.push(`文件 ${metadata.originalFileName} 迁移失败: ${error.message}`)
@@ -217,16 +253,19 @@ export class MetadataManager {
         await this.saveMetadata()
         
         // 删除旧的元数据文件
-        await fs.promises.unlink(oldMetadataPath)
+        if (fs.existsSync(oldMetadataPath)) {
+          await fs.promises.unlink(oldMetadataPath)
+        }
       } else {
         // 如果有错误，删除新的元数据文件
-        await fs.promises.unlink(newMetadataPath)
+        if (fs.existsSync(newMetadataPath)) {
+          await fs.promises.unlink(newMetadataPath)
+        }
       }
 
       return { success: errors.length === 0, errors }
     } catch (error) {
       // 如果发生错误，确保删除新的元数据文件
-      const newMetadataPath = path.join(newPath, METADATA_FILE)
       if (fs.existsSync(newMetadataPath)) {
         await fs.promises.unlink(newMetadataPath)
       }

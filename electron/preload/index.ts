@@ -212,7 +212,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
 
   mistake: {
-    getMistakes: () => ipcRenderer.invoke('file:get-mistakes')
+    getMistakes: () => ipcRenderer.invoke('file:get-mistakes'),
+    getTrainingHistory: () => ipcRenderer.invoke('file:get-training-history')
   },
 
   // 在 window.ipcRenderer 中添加配置相关的方法

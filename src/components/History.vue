@@ -14,20 +14,9 @@ const showAnswer = ref(false)
 
 onMounted(async () => {
   try {
-    const result = await window.ipcRenderer.mistake.getMistakes()
+    const result = await window.ipcRenderer.mistake.getTrainingHistory()
     if (result.success) {
-      historyList.value = result.data.filter(item => {
-        // 首先检查是否有元数据
-        if (!item.metadata) return false
-        
-        // 如果是配对项，只显示错题
-        if (item.metadata.isPaired) {
-          return item.metadata.type === 'mistake'
-        }
-        
-        // 未配对项，显示所有有类型的项目
-        return item.metadata.type === 'mistake' || item.metadata.type === 'answer'
-      })
+      historyList.value = result.data
     } else {
       error.value = result.error || '加载训练内容失败'
     }

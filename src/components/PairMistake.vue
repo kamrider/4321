@@ -22,28 +22,11 @@ onMounted(async () => {
     const uploadedFiles = uploadedFilesStr ? JSON.parse(uploadedFilesStr) : []
     console.log('获取到的上传文件:', uploadedFiles)
     
-    const result = await window.ipcRenderer.uploadFile.getMistakes()
+    const result = await window.ipcRenderer.mistake.getMistakes()
     if (result.success && result.data) {
-      // 修改匹配逻辑：只比较文件名而不是完整路径
+      // 使用 fileId 匹配文件
       mistakeList.value = result.data.filter(item => {
-        // 获取文件名
-        const getFileName = (path: string) => {
-          const parts = path.split('\\').pop()?.split('/') || []
-          return parts[parts.length - 1]
-        }
-        
-        const itemFileName = getFileName(item.itemPath || item.path || '')
-        
-        const matches = uploadedFiles.some(f => {
-          const uploadedFileName = getFileName(f.path || '')
-          console.log('比较文件名:', {
-            itemFileName,
-            uploadedFileName,
-            isMatch: itemFileName === uploadedFileName
-          })
-          return itemFileName === uploadedFileName
-        })
-        
+        const matches = uploadedFiles.some(f => f.fileId === item.fileId)
         return matches && !item.metadata?.isPaired
       })
       

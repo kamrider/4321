@@ -71,16 +71,36 @@ let isCancelled = false
 // 获取存储路径，如果不存在则使用默认路径
 let targetDirectory = store.get('storagePath', DEFAULT_STORAGE_PATH)
 
+// 添加临时目录配置
+const getTempDirectory = () => path.join(targetDirectory, 'temp')
+
 // 检查路径是否存在且可写
 try {
+  // 确保主目录存在
   if (!fs.existsSync(targetDirectory)) {
     fs.mkdirSync(targetDirectory, { recursive: true })
   }
   fs.accessSync(targetDirectory, fs.constants.W_OK)
+  
+  // 确保临时目录存在
+  const tempDirectory = getTempDirectory()
+  if (!fs.existsSync(tempDirectory)) {
+    fs.mkdirSync(tempDirectory, { recursive: true })
+  }
+  fs.accessSync(tempDirectory, fs.constants.W_OK)
 } catch (error) {
   console.error('存储路径不可用，使用默认路径:', error)
   targetDirectory = DEFAULT_STORAGE_PATH
   store.set('storagePath', DEFAULT_STORAGE_PATH)
+  
+  // 使用默认路径重新创建目录
+  if (!fs.existsSync(targetDirectory)) {
+    fs.mkdirSync(targetDirectory, { recursive: true })
+  }
+  const tempDirectory = getTempDirectory()
+  if (!fs.existsSync(tempDirectory)) {
+    fs.mkdirSync(tempDirectory, { recursive: true })
+  }
 }
 
 // 添加全局取消标志和取消映射
@@ -105,7 +125,7 @@ const metadataManager = new MetadataManager(targetDirectory)
 const configPath = 'config/training-config.json'
 const trainingManager = new TrainingManager(configPath)
 
-// 上传单个文件的函数
+// 修改上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
   try {
     // 检查全局取消状态
@@ -118,23 +138,28 @@ async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: st
     }
 
     const fileName = path.basename(filePath)
+    // 先保存到临时目录
+    const tempPath = path.join(getTempDirectory(), fileName)
+    // 最终目标路径
     const targetPath = path.join(targetDirectory, fileName)
-    const fileSize = fs.statSync(filePath).size
+    
+    // 复制到临时目录
+    await fs.promises.copyFile(filePath, tempPath)
+    
+    const fileSize = fs.statSync(tempPath).size
     const chunkSize = fileSize > 1024 * 1024 * 10 ? 1024 * 500 : 1024 * 100
 
-    // 创建写入流
+    // 从临时目录读取并写入目标目录
     const writeStream = fs.createWriteStream(targetPath)
-    const readStream = fs.createReadStream(filePath)
+    const readStream = fs.createReadStream(tempPath)
     
-    // 监听数据传输进度
-    let totalSize = fs.statSync(filePath).size
+    let totalSize = fileSize
     let uploadedSize = 0
     
     readStream.on('data', (chunk) => {
       uploadedSize += chunk.length
       const progress = Math.round((uploadedSize / totalSize) * 100)
       
-      // 发送进度信息
       event.sender.send('file:progress', {
         filePath,
         progress,
@@ -153,15 +178,18 @@ async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: st
     // 添加元数据并获取文件ID
     const fileId = await metadataManager.addFile(filePath, targetPath)
     
+    // 删除临时文件
+    await fs.promises.unlink(tempPath)
+    
     // 发送完成状态
     event.sender.send('file:progress', {
       filePath,
-      fileId,  // 确保包含 fileId
+      fileId,
       progress: 100,
       status: 'completed',
       fileInfo: {
-        uploadDate: new Date().toISOString().split('T')[0],
-        originalDate: fs.statSync(filePath).birthtime.toISOString().split('T')[0]
+        uploadDate: new Date().toISOString(),
+        originalDate: fs.statSync(filePath).birthtime.toISOString()
       }
     })
 
@@ -270,6 +298,7 @@ ipcMain.handle('open-win', (_, arg) => {
   }
 })
 
+// 修改文件选择处理
 ipcMain.handle('file:select', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -278,42 +307,172 @@ ipcMain.handle('file:select', async () => {
       { name: '所有文件', extensions: ['*'] },
     ],
   });
+  
   if (result.canceled || result.filePaths.length === 0) {
     return null;
   }
-  return result.filePaths[0];
+
+  try {
+    const sourcePath = result.filePaths[0];
+    const fileName = path.basename(sourcePath);
+    const tempPath = path.join(getTempDirectory(), `temp-${Date.now()}-${fileName}`);
+    
+    // 复制到临时目录
+    await fs.promises.copyFile(sourcePath, tempPath);
+    
+    return tempPath;
+  } catch (error) {
+    console.error('复制文件到临时目录失败:', error);
+    throw error;
+  }
 })
 
-// 修改主上传处理器
-ipcMain.handle('file:upload', async (event, filePaths) => {
-  console.log('主进程收到上传请求,文件路径:', filePaths)
-  const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
-  
-  const validPaths = validateFilePaths(paths)
-  if (validPaths.length === 0) {
-    return { success: false, message: '没有有效的文件可上传' }
-  }
+// 修改文件预览处理
+ipcMain.handle('file:preview', async (event, filePath: string) => {
+  try {
+    const supportedExtensions = ['jpg', 'jpeg', 'png'];
+    const fileExtension = path.extname(filePath).toLowerCase().slice(1);
 
+    if (!supportedExtensions.includes(fileExtension)) {
+      throw new Error('Unsupported file type for preview.');
+    }
+
+    const fileData = fs.readFileSync(filePath);
+    const base64Data = fileData.toString('base64');
+    return { 
+      previewUrl: `data:image/${fileExtension};base64,${base64Data}`,
+      tempPath: filePath
+    };
+  } catch (error) {
+    console.error('Error generating preview:', error);
+    throw new Error('Unable to generate preview');
+  }
+})
+
+// 添加清理临时文件的处理
+ipcMain.handle('file:cleanup-temp', async (event, filePath?: string) => {
+  try {
+    if (filePath) {
+      // 删除单个临时文件
+      if (filePath.includes(getTempDirectory())) {
+        await fs.promises.unlink(filePath);
+      }
+    } else {
+      // 删除所有临时文件
+      const tempDir = getTempDirectory();
+      const files = await fs.promises.readdir(tempDir);
+      await Promise.all(
+        files.map(file => fs.promises.unlink(path.join(tempDir, file)))
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('清理临时文件失败:', error);
+    return { success: false, error: error.message };
+  }
+})
+
+// 修改粘贴上传处理
+ipcMain.handle('file:upload-paste', async (event, data: {
+  buffer: ArrayBuffer
+  type: string
+  name: string
+}) => {
+  try {
+    const fileName = `temp-${Date.now()}-${data.name}`;
+    const tempPath = path.join(getTempDirectory(), fileName);
+
+    // 写入临时文件
+    await fs.promises.writeFile(tempPath, Buffer.from(data.buffer));
+    
+    // 返回临时文件路径
+    return {
+      success: true,
+      tempPath,
+      fileName
+    };
+  } catch (error) {
+    console.error('粘贴上传失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+})
+
+// 修改上传处理
+ipcMain.handle('file:upload', async (event, tempPaths) => {
+  console.log('主进程收到上传请求,临时文件路径:', tempPaths);
+  const paths = Array.isArray(tempPaths) ? tempPaths : [tempPaths];
+  
   // 重置取消状态
-  isAllCancelled = false
-  validPaths.forEach(path => cancelMap[path] = false)
+  isAllCancelled = false;
+  paths.forEach(path => cancelMap[path] = false);
   
   const results = await Promise.all(
-    validPaths.map(path => uploadSingleFile(event, path))
-  )
+    paths.map(async tempPath => {
+      try {
+        // 检查文件是否在临时目录中
+        if (!tempPath.includes(getTempDirectory())) {
+          throw new Error('文件不在临时目录中');
+        }
 
-  const failedFiles = results.filter(result => !result.success)
-  if (failedFiles.length > 0) {
-    console.warn('以下文件上传失败:', failedFiles.map(file => file.filePath))
-  }
+        const fileName = path.basename(tempPath).replace('temp-', '');
+        const targetPath = path.join(targetDirectory, fileName);
+        
+        // 复制到目标目录
+        await fs.promises.copyFile(tempPath, targetPath);
+        
+        // 添加元数据
+        const fileId = await metadataManager.addFile(targetPath, targetPath);
+        
+        // 删除临时文件
+        await fs.promises.unlink(tempPath);
+        
+        // 发送完成状态
+        event.sender.send('file:progress', {
+          filePath: tempPath,
+          fileId,
+          progress: 100,
+          status: 'completed',
+          targetPath,
+          fileInfo: {
+            uploadDate: new Date().toISOString(),
+            originalDate: new Date().toISOString()
+          }
+        });
 
+        return {
+          tempPath,
+          fileId,
+          success: true,
+          targetPath
+        };
+      } catch (error) {
+        console.error('上传文件失败:', error);
+        event.sender.send('file:progress', {
+          filePath: tempPath,
+          progress: 0,
+          status: 'error',
+          error: error.message
+        });
+        return {
+          tempPath,
+          success: false,
+          error: error.message
+        };
+      }
+    })
+  );
+
+  const failedFiles = results.filter(result => !result.success);
   return { 
     results, 
     success: failedFiles.length === 0,
     message: failedFiles.length > 0 
       ? `${failedFiles.length} 个文件上传失败` 
       : '所有文件上传成功'
-  }
+  };
 })
 
 // 修改取消处理器
@@ -325,24 +484,6 @@ ipcMain.handle('file:cancel', async (event, filePath) => {
     isAllCancelled = true
     Object.keys(cancelMap).forEach(path => cancelMap[path] = true)
     return { success: true, message: '已取消所有上传' }
-  }
-})
-
-ipcMain.handle('file:preview', async (event, filePath) => {
-  try {
-    const supportedExtensions = ['jpg', 'jpeg', 'png'];
-    const fileExtension = path.extname(filePath).toLowerCase().slice(1);
-
-    if (!supportedExtensions.includes(fileExtension)) {
-      throw new Error('Unsupported file type for preview.');
-    }
-
-    const fileData = fs.readFileSync(filePath);
-    const base64Data = fileData.toString('base64');
-    return { previewUrl: `data:image/${fileExtension};base64,${base64Data}` };
-  } catch (error) {
-    console.error('Error generating preview:', error);
-    throw new Error('Unable to generate preview');
   }
 })
 
@@ -404,7 +545,7 @@ ipcMain.handle('file:get-metadata', () => {
 
 ipcMain.handle('file:get-mistakes', async () => {
   try {
-    // ���查存储路径是否存在
+    // 查存储路径是否存在
     if (!fs.existsSync(targetDirectory)) {
       return {
         success: false,
@@ -647,7 +788,7 @@ ipcMain.handle('config:get-training-config', async () => {
       data: trainingManager.getDefaultConfig()
     }
   } catch (error) {
-    console.error('获取训��配置失败:', error)
+    console.error('获取训配置失败:', error)
     return {
       success: false,
       error: error.message
@@ -694,47 +835,22 @@ ipcMain.handle('config:update-training-config', async (_, config: TrainingConfig
   }
 })
 
-// 处理粘贴上传
-ipcMain.handle('file:upload-paste', async (event, data: {
-  buffer: ArrayBuffer
-  type: string
-  name: string
-}) => {
+// 添加处理拖拽文件的函数
+ipcMain.handle('file:handle-drop', async (event, filePath: string) => {
   try {
-    const fileName = `${Date.now()}-${data.name}`
-    const filePath = path.join(targetDirectory, fileName)
-
-    // 确保目录存在
-    if (!fs.existsSync(targetDirectory)) {
-      fs.mkdirSync(targetDirectory, { recursive: true })
-    }
-
-    // 写入文件
-    await fs.promises.writeFile(filePath, Buffer.from(data.buffer))
+    const fileName = path.basename(filePath)
+    const tempPath = path.join(getTempDirectory(), `temp-${Date.now()}-${fileName}`)
     
-    // 添加元数据并获取文件ID
-    const fileId = await metadataManager.addFile(filePath, filePath)
-
-    // 发送进度信息
-    event.sender.send('file:progress', {
-      filePath,
-      fileId,
-      progress: 100,
-      status: 'completed',
-      fileInfo: {
-        uploadDate: new Date().toISOString(),
-        originalDate: new Date().toISOString()
-      }
-    })
-
+    // 复制文件到临时目录
+    await fs.promises.copyFile(filePath, tempPath)
+    
     return {
       success: true,
-      filePath,
-      fileId,
+      tempPath,
       fileName
     }
   } catch (error) {
-    console.error('粘贴上传失败:', error)
+    console.error('处理拖拽文件失败:', error)
     return {
       success: false,
       error: error.message

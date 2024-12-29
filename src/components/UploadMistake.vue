@@ -17,6 +17,7 @@ interface FileItem {
   type?: 'mistake' | 'answer'
   pairId?: string
   isPaired?: boolean
+  targetPath?: string
 }
 
 const fileList = ref<FileItem[]>([])
@@ -45,8 +46,16 @@ const showError = (message: string, isWarning = false) => {
 // 清理函数
 let removeProgressListener: (() => void) | null = null
 
-onUnmounted(() => {
+onUnmounted(async () => {
   removeProgressListener?.()
+  // 如果有未上传的文件，清理临时文件
+  if (fileList.value.some(file => file.status !== 'completed')) {
+    try {
+      await window.ipcRenderer.uploadFile.cleanupTemp()
+    } catch (error) {
+      console.error('清理临时文件失败:', error)
+    }
+  }
 })
 
 // 文件选择
@@ -59,13 +68,13 @@ const handleFileSelect = async () => {
   
   try {
     console.log('调用文件选择对话框...')
-    const filePath = await window.ipcRenderer.uploadFile.select()
-    console.log('选择的文件路径:', filePath)
+    const tempPath = await window.ipcRenderer.uploadFile.select()
+    console.log('选择的文件路径:', tempPath)
     
-    if (filePath) {
-      const preview = await window.ipcRenderer.uploadFile.getPreview(filePath)
+    if (tempPath) {
+      const preview = await window.ipcRenderer.uploadFile.getPreview(tempPath)
       fileList.value.push({
-        path: filePath,
+        path: tempPath,
         preview: preview.previewUrl,
         progress: 0,
         status: 'idle'
@@ -104,7 +113,6 @@ const startUpload = async (shouldRedirect = true) => {
         case 'completed':
           console.log('上传完成')
           file.status = 'completed'
-          // 确保 fileId 存在再设置
           if (progress.fileId) {
             console.log('设置文件ID:', progress.fileId)
             file.fileId = progress.fileId
@@ -113,6 +121,9 @@ const startUpload = async (shouldRedirect = true) => {
             file.uploadDate = progress.fileInfo.uploadDate
             file.originalDate = progress.fileInfo.originalDate
           }
+          if (progress.targetPath) {
+            file.targetPath = progress.targetPath
+          }
           
           // 检查是否所有文件都上传完成
           const allCompleted = fileList.value.every(f => f.status === 'completed')
@@ -120,8 +131,8 @@ const startUpload = async (shouldRedirect = true) => {
             const uploadedFiles = fileList.value
               .filter(f => f.status === 'completed')
               .map(f => ({
-                path: f.path,
-                filePath: f.filePath || f.path
+                path: f.targetPath || f.path,
+                fileId: f.fileId
               }))
             
             if (uploadedFiles.length > 0) {
@@ -153,9 +164,9 @@ const startUpload = async (shouldRedirect = true) => {
   })
   
   try {
-    const filePaths = fileList.value.map(file => file.path)
-    console.log('开始调用上传方法,文件路径:', filePaths)
-    const result = await window.ipcRenderer.uploadFile.start(filePaths)
+    const tempPaths = fileList.value.map(file => file.path)
+    console.log('开始调用上传方法,临时文件路径:', tempPaths)
+    const result = await window.ipcRenderer.uploadFile.start(tempPaths)
     console.log('上传结果:', result)
     
     if (!result.success) {
@@ -172,7 +183,7 @@ const startUpload = async (shouldRedirect = true) => {
   }
 }
 
-// 取消上���
+// 取消上传
 const cancelUpload = async (filePath?: string) => {
   await window.ipcRenderer.uploadFile.cancel(filePath)
   
@@ -199,19 +210,48 @@ const handleFileDrop = async (event: DragEvent) => {
   if (!files || files.length === 0) return
   
   let addedCount = 0
-  for (const file of files) {
+  for (const file of Array.from(files)) {
     if (!file.type.startsWith('image/')) {
       showError('只能上传图片文件！')
       continue
     }
     
-    if (await addFileToList(file.path)) {
-      addedCount++
+    try {
+      // 获取文件路径
+      const filePath = (file as any).path
+      if (!filePath) {
+        showError('无法获取文件路径')
+        continue
+      }
+
+      // 使用 handleDrop API 处理拖拽的文件
+      const result = await window.ipcRenderer.uploadFile.handleDrop(filePath)
+
+      if (result.success) {
+        // 获取预览
+        const preview = await window.ipcRenderer.uploadFile.getPreview(result.tempPath)
+        
+        // 添加到文件列表
+        fileList.value.push({
+          path: result.tempPath,
+          preview: preview.previewUrl,
+          progress: 0,
+          status: 'idle'
+        })
+        
+        addedCount++
+      } else {
+        showError(`文件 ${file.name} 准备失败: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('处理拖拽文件失败:', error)
+      showError(`文件 ${file.name} 处理失败`)
     }
   }
   
+  // 不再自动开始上传，让用户手动点击上传按钮
   if (addedCount > 0) {
-    await startUpload(false)
+    ElMessage.success('文件已准备好，请点击上传按钮开始上传')
   }
 }
 
@@ -229,36 +269,20 @@ const isFileDuplicate = (filePath: string) => {
   return fileList.value.some(file => file.path === filePath)
 }
 
-// 添加文件到列表
-const addFileToList = async (filePath: string) => {
-  if (isFileDuplicate(filePath)) {
-    showError('文件已添加，请勿重复选择相同文件')
-    return false
-  }
-
-  try {
-    const preview = await window.ipcRenderer.uploadFile.getPreview(filePath)
-    fileList.value.push({
-      path: filePath,
-      preview: preview.previewUrl,
-      progress: 0,
-      status: 'idle',
-      error: null
-    })
-    return true
-  } catch (error) {
-    console.error('获取文件预览失败:', error)
-    showError('获取文件预览失败，请重试')
-    return false
-  }
-}
-
 // 清空所有文件
-const clearAllFiles = () => {
+const clearAllFiles = async () => {
   // 如果有正在上传的文件，先取消上传
   if (hasUploadingFiles.value) {
-    cancelUpload()
+    await cancelUpload()
   }
+  
+  // 清理所有临时文件
+  try {
+    await window.ipcRenderer.uploadFile.cleanupTemp()
+  } catch (error) {
+    console.error('清理临时文件失败:', error)
+  }
+  
   fileList.value = []
 }
 
@@ -268,6 +292,16 @@ const removeFile = async (filePath: string) => {
   if (file?.status === 'uploading') {
     await cancelUpload(filePath)
   }
+  
+  // 如果是临时文件，删除它
+  if (file && file.status !== 'completed') {
+    try {
+      await window.ipcRenderer.uploadFile.cleanupTemp(filePath)
+    } catch (error) {
+      console.error('删除临时文件失败:', error)
+    }
+  }
+  
   fileList.value = fileList.value.filter(f => f.path !== filePath)
 }
 
@@ -325,7 +359,7 @@ const handlePaste = async (event: ClipboardEvent) => {
           }
           fileList.value.push(fileItem)
 
-          // 上传文件
+          // 上传到临时目录
           const result = await window.ipcRenderer.uploadFile.uploadPastedFile({
             buffer: arrayBuffer,
             type: clipboardFile.type,
@@ -333,27 +367,27 @@ const handlePaste = async (event: ClipboardEvent) => {
           })
 
           if (result.success) {
-            // ���用现有的预览逻辑
-            const preview = await window.ipcRenderer.uploadFile.getPreview(result.filePath)
+            // 获取预览
+            const preview = await window.ipcRenderer.uploadFile.getPreview(result.tempPath)
             
             // 更新文件状态
             const index = fileList.value.findIndex(f => f.path === fileName)
             if (index !== -1) {
               fileList.value[index] = {
                 ...fileList.value[index],
-                path: result.filePath,
+                path: result.tempPath,
                 preview: preview.previewUrl,
-                status: 'completed',
-                progress: 100
+                status: 'idle',
+                progress: 0
               }
             }
-            ElMessage.success('粘贴上传成功')
+            ElMessage.success('准备上传成功')
           } else {
             const index = fileList.value.findIndex(f => f.path === fileName)
             if (index !== -1) {
               fileList.value[index].status = 'error'
             }
-            ElMessage.error(`粘贴上传失败: ${result.error}`)
+            ElMessage.error(`准备上传失败: ${result.error}`)
           }
         } catch (error) {
           console.error('粘贴上传错误:', error)

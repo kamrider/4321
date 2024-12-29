@@ -143,121 +143,33 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // 添加文件操作相关的方法
   uploadFile: {
     // 选择文件
-    select: async () => {
-      try {
-        return await ipcRenderer.invoke('file:select');
-      } catch (error) {
-        console.error('Error selecting file:', error);
-        throw error;
-      }
-    },
+    select: () => ipcRenderer.invoke('file:select'),
     
-    // 开始上传文件
-    start: (filePaths: string | string[]) => {
-      const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
-      
-      if (paths.length === 0) {
-        throw new Error('没有提供要上传的文件')
-      }
-      
-      const invalidPaths = paths.filter(path => !validatePath(path))
-      if (invalidPaths.length > 0) {
-        throw new Error(`以下文件路径无效: ${invalidPaths.join(', ')}`)
-      }
-      
-      return ipcRenderer.invoke('file:upload', paths)
-    },
+    // 获取预览
+    getPreview: (filePath: string) => ipcRenderer.invoke('file:preview', filePath),
     
-    // 获取上传进度
-    onProgress: (callback: (progress: UploadProgress) => void) => {
-      const listener = (_event: any, progress: UploadProgress) => callback(progress)
-      ipcRenderer.on('file:progress', listener)
-      return () => ipcRenderer.removeListener('file:progress', listener)
-    },
+    // 开始上传
+    start: (filePaths: string[]) => ipcRenderer.invoke('file:upload', filePaths),
     
     // 取消上传
-    cancel: async (filePath?: string) => {
-      try {
-        const result = await ipcRenderer.invoke('file:cancel', filePath)
-        return { success: true, result }
-      } catch (error) {
-        console.error('Error canceling upload:', error)
-        return { success: false, error }
-      }
-    },
+    cancel: (filePath?: string) => ipcRenderer.invoke('file:cancel', filePath),
     
-    // 获取文件预览
-    getPreview: async (filePath: string) => {
-      try {
-        return await ipcRenderer.invoke('file:preview', filePath);
-      } catch (error) {
-        console.error('Error getting file preview:', error);
-        throw error;
-      }
-    },
-
-    // 获取存储路径
-    getStoragePath: async () => {
-      try {
-        return await ipcRenderer.invoke('file:get-storage-path');
-      } catch (error) {
-        console.error('Error getting storage path:', error);
-        throw error;
-      }
-    },
-
-    // 设置存储路径
-    setStoragePath: async () => {
-      try {
-        return await ipcRenderer.invoke('file:set-storage-path');
-      } catch (error) {
-        console.error('Error setting storage path:', error);
-        throw error;
-      }
-    },
-
-    // 重置存储路径
-    resetStoragePath: async () => {
-      try {
-        return await ipcRenderer.invoke('file:reset-storage-path');
-      } catch (error) {
-        console.error('Error resetting storage path:', error);
-        throw error;
-      }
-    },
-
-    // 获取元数据
-    getMetadata: async () => {
-      try {
-        return await ipcRenderer.invoke('file:get-metadata')
-      } catch (error) {
-        console.error('Error getting metadata:', error)
-        throw error
-      }
-    },
-
-    // 获取错题列表
-    getMistakes: async () => {
-      try {
-        return await ipcRenderer.invoke('file:get-mistakes')
-      } catch (error) {
-        console.error('Error getting mistakes:', error)
-        throw error
-      }
-    },
-
-    // 添加粘贴上传方法
-    uploadPastedFile: async (data: {
-      buffer: ArrayBuffer
-      type: string
-      name: string
-    }) => {
-      try {
-        const result = await ipcRenderer.invoke('file:upload-paste', data)
-        return result
-      } catch (error) {
-        console.error('Error uploading pasted file:', error)
-        return { success: false, error }
+    // 清理临时文件
+    cleanupTemp: (filePath?: string) => ipcRenderer.invoke('file:cleanup-temp', filePath),
+    
+    // 粘贴上传
+    uploadPastedFile: (data: { buffer: ArrayBuffer, type: string, name: string }) => 
+      ipcRenderer.invoke('file:upload-paste', data),
+    
+    // 处理拖拽文件
+    handleDrop: (filePath: string) => ipcRenderer.invoke('file:handle-drop', filePath),
+    
+    // 监听进度
+    onProgress: (callback: (progress: any) => void) => {
+      const progressListener = (_: any, value: any) => callback(value)
+      ipcRenderer.on('file:progress', progressListener)
+      return () => {
+        ipcRenderer.removeListener('file:progress', progressListener)
       }
     }
   },

@@ -945,3 +945,79 @@ ipcMain.handle('file:get-training-history', async () => {
     };
   }
 });
+
+// 获取成员列表
+ipcMain.handle('member:get-list', async () => {
+  try {
+    const members = await metadataManager.getMembers()
+    return {
+      success: true,
+      data: members
+    }
+  } catch (error) {
+    console.error('获取成员列表失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 创建新成员
+ipcMain.handle('member:create', async (_, memberName: string) => {
+  try {
+    const success = await metadataManager.createMember(memberName)
+    return {
+      success,
+      message: success ? '创建成功' : '创建失败'
+    }
+  } catch (error) {
+    console.error('创建成员失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 切换成员
+ipcMain.handle('member:switch', async (_, memberName: string) => {
+  try {
+    const success = await metadataManager.switchMember(memberName)
+    return {
+      success,
+      message: success ? '切换成功' : '切换失败'
+    }
+  } catch (error) {
+    console.error('切换成员失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 删除成员
+ipcMain.handle('member:delete', async (_, memberName: string) => {
+  try {
+    const success = await metadataManager.deleteMember(memberName)
+    return {
+      success,
+      message: success ? '删除成功' : '删除失败'
+    }
+  } catch (error) {
+    console.error('删除成员失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 获取当前成员
+ipcMain.handle('member:get-current', () => {
+  return {
+    success: true,
+    data: metadataManager.getCurrentMember()
+  }
+})

@@ -9,12 +9,16 @@ export class MetadataManager {
   private metadataPath: string
   private baseDir: string
   private metadata: MetadataStore
+  private membersDir: string
+  private currentMember: string | null = null
 
   constructor(storageDir: string) {
     this.baseDir = storageDir
+    this.membersDir = path.join(storageDir, 'members')
     this.metadataPath = path.join(storageDir, METADATA_FILE)
     this.metadata = this.createDefaultStore(storageDir)
     this.loadMetadata()
+    this.initializeMembersDirectory()
   }
 
   private createDefaultStore(baseDir: string): MetadataStore {
@@ -277,5 +281,130 @@ export class MetadataManager {
     // 在返回之前验证一下元数据
     this.validateMetadata()
     return this.metadata
+  }
+
+  private async initializeMembersDirectory() {
+    // 确保 members 目录存在
+    if (!fs.existsSync(this.membersDir)) {
+      await fs.promises.mkdir(this.membersDir, { recursive: true })
+    }
+
+    // 如果没有成员，创建默认成员
+    const members = await this.getMembers()
+    if (members.length === 0) {
+      await this.createMember('default')
+    }
+
+    // 如果没有当前成员，设置为第一个成员
+    if (!this.currentMember) {
+      const members = await this.getMembers()
+      if (members.length > 0) {
+        await this.switchMember(members[0])
+      }
+    }
+  }
+
+  // 获取所有成员列表
+  async getMembers(): Promise<string[]> {
+    try {
+      const items = await fs.promises.readdir(this.membersDir, { withFileTypes: true })
+      return items
+        .filter(item => item.isDirectory())
+        .map(item => item.name)
+    } catch (error) {
+      console.error('获取成员列表失败:', error)
+      return []
+    }
+  }
+
+  // 创建新成员
+  async createMember(memberName: string): Promise<boolean> {
+    try {
+      const memberDir = path.join(this.membersDir, memberName)
+      const memberFilesDir = path.join(memberDir, 'files')
+      
+      // 检查成员是否已存在
+      if (fs.existsSync(memberDir)) {
+        throw new Error(`成员 ${memberName} 已存在`)
+      }
+
+      // 创建成员目录结构
+      await fs.promises.mkdir(memberDir, { recursive: true })
+      await fs.promises.mkdir(memberFilesDir, { recursive: true })
+      
+      // 创建成员的 metadata 文件
+      const memberMetadataPath = path.join(memberDir, METADATA_FILE)
+      const initialMetadata = this.createDefaultStore(memberFilesDir)
+      await fs.promises.writeFile(
+        memberMetadataPath,
+        JSON.stringify(initialMetadata, null, 2)
+      )
+
+      return true
+    } catch (error) {
+      console.error(`创建成员 ${memberName} 失败:`, error)
+      return false
+    }
+  }
+
+  // 切换到指定成员
+  async switchMember(memberName: string): Promise<boolean> {
+    try {
+      const memberDir = path.join(this.membersDir, memberName)
+      const memberFilesDir = path.join(memberDir, 'files')
+      const memberMetadataPath = path.join(memberDir, METADATA_FILE)
+
+      // 检查成员是否存在
+      if (!fs.existsSync(memberDir)) {
+        throw new Error(`成员 ${memberName} 不存在`)
+      }
+
+      // 更新当前路径
+      this.currentMember = memberName
+      this.baseDir = memberFilesDir
+      this.metadataPath = memberMetadataPath
+      
+      // 加载新的 metadata
+      this.loadMetadata()
+
+      // 保存当前成员到配置文件
+      const currentMemberPath = path.join(this.membersDir, 'current.txt')
+      await fs.promises.writeFile(currentMemberPath, memberName, 'utf-8')
+
+      return true
+    } catch (error) {
+      console.error(`切换到成员 ${memberName} 失败:`, error)
+      return false
+    }
+  }
+
+  // 删除成员
+  async deleteMember(memberName: string): Promise<boolean> {
+    try {
+      // 不允许删除当前成员
+      if (memberName === this.currentMember) {
+        throw new Error('不能删除当前使用的成员')
+      }
+
+      const memberDir = path.join(this.membersDir, memberName)
+      
+      // 检查成员是否存在
+      if (!fs.existsSync(memberDir)) {
+        throw new Error(`成员 ${memberName} 不存在`)
+      }
+
+      // 删除成员目录
+      await fs.promises.rm(memberDir, { recursive: true })
+
+      return true
+    } catch (error) {
+      console.error(`删除成员 ${memberName} 失败:`, error)
+      return false
+    }
+  }
+
+  // 获取当前成员
+  getCurrentMember(): string | null {
+    return this.currentMember
   }
 } 

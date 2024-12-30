@@ -4,6 +4,7 @@ import Settings from '../components/Settings.vue'
 import Mistake from '../components/Mistake.vue'
 import NotFound from '../components/NotFound.vue'
 import History from '../components/History.vue'
+import Members from '../components/Members.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -27,6 +28,10 @@ const router = createRouter({
     {
       path: '/history',
       component: History
+    },
+    {
+      path: '/members',
+      component: Members
     },
     {
       path: '/:pathMatch(.*)*',

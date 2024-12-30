@@ -23,6 +23,11 @@
       <template #title>训练内容</template>
     </el-menu-item>
 
+    <el-menu-item index="/members">
+      <el-icon><User /></el-icon>
+      <template #title>成员管理</template>
+    </el-menu-item>
+
     <el-menu-item index="/settings">
       <el-icon><Setting /></el-icon>
       <template #title>设置</template>
@@ -33,7 +38,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Upload, DocumentCopy, Notebook, Setting } from '@element-plus/icons-vue'
+import { Upload, DocumentCopy, Notebook, Setting, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

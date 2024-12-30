@@ -46,7 +46,7 @@ const storagePath = ref('')
 
 onMounted(async () => {
   try {
-    storagePath.value = await window.ipcRenderer.uploadFile.getStoragePath()
+    storagePath.value = await window.ipcRenderer.invoke('file:get-storage-path')
   } catch (error) {
     console.error('获取存储路径失败:', error)
   }
@@ -54,7 +54,7 @@ onMounted(async () => {
 
 const handleSetStoragePath = async () => {
   try {
-    const result = await window.ipcRenderer.uploadFile.setStoragePath()
+    const result = await window.ipcRenderer.invoke('file:set-storage-path')
     if (result.success) {
       storagePath.value = result.path
       ElMessage.success('存储路径设置成功')

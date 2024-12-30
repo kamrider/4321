@@ -545,29 +545,30 @@ ipcMain.handle('file:get-metadata', () => {
 
 ipcMain.handle('file:get-mistakes', async () => {
   try {
-    // 查存储路径是否存在
-    if (!fs.existsSync(targetDirectory)) {
+    // 检查当前成员目录是否存在
+    const currentDir = path.join(metadataManager.getCurrentMemberDir())
+    if (!fs.existsSync(currentDir)) {
       return {
         success: false,
         data: [],
         error: '存储路径不存在'
-      };
+      }
     }
 
     // 从元数据管理器获取所有文件信息
-    const metadata = await metadataManager.getMetadata();
-    const allFiles = Object.entries(metadata.files);
+    const metadata = await metadataManager.getMetadata()
+    const allFiles = Object.entries(metadata.files)
     
     // 创建一个 Map 来存储所有文件
-    const fileMap = new Map();
+    const fileMap = new Map()
     
-    // 第一步：处理所有文件的基息
+    // 处理所有文件
     for (const [id, file] of allFiles) {
       try {
-        const filePath = path.join(targetDirectory, file.relativePath);
-        const fileData = await fs.promises.readFile(filePath);
-        const fileExtension = path.extname(filePath).toLowerCase().slice(1);
-        const base64Data = fileData.toString('base64');
+        const filePath = path.join(currentDir, file.relativePath)
+        const fileData = await fs.promises.readFile(filePath)
+        const fileExtension = path.extname(filePath).toLowerCase().slice(1)
+        const base64Data = fileData.toString('base64')
         
         fileMap.set(id, {
           fileId: id,
@@ -581,19 +582,18 @@ ipcMain.handle('file:get-mistakes', async () => {
           hash: file.hash,
           metadata: {
             ...file,
-            pairedWith: null  // 初始化 pairedWith 为 null
+            pairedWith: null
           }
-        });
+        })
       } catch (error) {
-        console.error(`处理文件 ${id} 失败:`, error);
+        console.error(`处理文件 ${id} 失败:`, error)
       }
     }
-    
-    // 第二步：处理配对关系
+
+    // 处理配对关系
     for (const [id, file] of allFiles) {
-      if (file.isPaired && file.pairId) {
-        const currentFile = fileMap.get(id);
-        // 查找所有具有相同 pairId 的配对文件
+      if (fileMap.has(id) && file.isPaired && file.pairId) {
+        const currentFile = fileMap.get(id)
         const pairedFiles = Array.from(fileMap.values()).filter(
           f => f.metadata.pairId === file.pairId && f.fileId !== id
         );
@@ -603,22 +603,21 @@ ipcMain.handle('file:get-mistakes', async () => {
         }
       }
     }
-    
-    const validMistakes = Array.from(fileMap.values());
-    
+
+    const validFiles = Array.from(fileMap.values())
     return {
       success: true,
-      data: validMistakes
-    };
+      data: validFiles
+    }
   } catch (error) {
-    console.error('获取错题列表失败:', error);
+    console.error('获取错题列表失败:', error)
     return {
       success: false,
       data: [],
       error: error.message
-    };
+    }
   }
-});
+})
 
 // 提交训练结果
 ipcMain.handle('training:submit-result', async (event, fileId: string, success: boolean, trainingDate?: string) => {
@@ -861,38 +860,39 @@ ipcMain.handle('file:handle-drop', async (event, filePath: string) => {
 // 获取训练历史
 ipcMain.handle('file:get-training-history', async () => {
   try {
-    // 检查存储路径是否存在
-    if (!fs.existsSync(targetDirectory)) {
+    // 检查当前成员目录是否存在
+    const currentDir = path.join(metadataManager.getCurrentMemberDir())
+    if (!fs.existsSync(currentDir)) {
       return {
         success: false,
         data: [],
         error: '存储路径不存在'
-      };
+      }
     }
 
     // 从元数据管理器获取所有文件信息
-    const metadata = await metadataManager.getMetadata();
-    const allFiles = Object.entries(metadata.files);
+    const metadata = await metadataManager.getMetadata()
+    const allFiles = Object.entries(metadata.files)
     
     // 创建一个 Map 来存储所有文件
-    const fileMap = new Map();
+    const fileMap = new Map()
     
     // 第一步：处理所有文件的基本信息
     for (const [id, file] of allFiles) {
       try {
         // 筛选条件：只处理错题类型的文件
-        if (file.type !== 'mistake') continue;
+        if (file.type !== 'mistake') continue
 
-        const filePath = path.join(targetDirectory, file.relativePath);
-        const fileData = await fs.promises.readFile(filePath);
-        const fileExtension = path.extname(filePath).toLowerCase().slice(1);
-        const base64Data = fileData.toString('base64');
+        const filePath = path.join(currentDir, file.relativePath)
+        const fileData = await fs.promises.readFile(filePath)
+        const fileExtension = path.extname(filePath).toLowerCase().slice(1)
+        const base64Data = fileData.toString('base64')
         
         // 检查是否需要训练
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const nextTrainingDate = new Date(file.nextTrainingDate);
-        nextTrainingDate.setHours(0, 0, 0, 0);
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const nextTrainingDate = new Date(file.nextTrainingDate)
+        nextTrainingDate.setHours(0, 0, 0, 0)
         
         // 只添加今天需要训练或已经逾期的文件
         if (nextTrainingDate <= today) {
@@ -908,43 +908,40 @@ ipcMain.handle('file:get-training-history', async () => {
             hash: file.hash,
             metadata: {
               ...file,
-              pairedWith: null  // 初始化 pairedWith 为 null
+              pairedWith: null
             }
-          });
+          })
         }
       } catch (error) {
-        console.error(`处理文件 ${id} 失败:`, error);
+        console.error(`处理文件 ${id} 失败:`, error)
       }
     }
     
     // 第二步：处理配对关系
     for (const [id, file] of allFiles) {
       if (fileMap.has(id) && file.isPaired && file.pairId) {
-        const currentFile = fileMap.get(id);
-        // 查找所有具有相同 pairId 的配对文件
+        const currentFile = fileMap.get(id)
         const pairedFiles = Array.from(fileMap.values()).filter(
           f => f.metadata.pairId === file.pairId && f.fileId !== id
-        );
-        
-        currentFile.metadata.pairedWith = pairedFiles;
+        )
+        currentFile.metadata.pairedWith = pairedFiles
       }
     }
     
-    const validFiles = Array.from(fileMap.values());
-    
+    const validFiles = Array.from(fileMap.values())
     return {
       success: true,
       data: validFiles
-    };
+    }
   } catch (error) {
-    console.error('获取训练历史失败:', error);
+    console.error('获取训练历史失败:', error)
     return {
       success: false,
       data: [],
       error: error.message
-    };
+    }
   }
-});
+})
 
 // 获取成员列表
 ipcMain.handle('member:get-list', async () => {

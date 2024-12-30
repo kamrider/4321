@@ -127,6 +127,10 @@ export class MetadataManager {
         // 更新基础目录为当前目录
         parsed.baseDir = this.baseDir
         this.metadata = parsed
+      } else {
+        // 如果元数据文件不存在，创建一个新的
+        this.metadata = this.createDefaultStore(this.baseDir)
+        this.saveMetadata()
       }
     } catch (error) {
       console.error('加载元数据失败:', error)
@@ -401,6 +405,14 @@ export class MetadataManager {
       console.error(`删除成员 ${memberName} 失败:`, error)
       return false
     }
+  }
+
+  // 获取当前成员目录
+  getCurrentMemberDir(): string {
+    if (!this.currentMember) {
+      throw new Error('未选择成员')
+    }
+    return path.join(this.membersDir, this.currentMember, 'files')
   }
 
   // 获取当前成员

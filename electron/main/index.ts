@@ -1032,3 +1032,38 @@ ipcMain.handle('member:get-current', () => {
     data: metadataManager.getCurrentMember()
   }
 })
+
+// 添加文件导出处理
+ipcMain.handle('file:export', async (event, filePaths: string[]) => {
+  try {
+    // 让用户选择导出目录
+    const result = await dialog.showOpenDialog({
+      title: '选择导出目录',
+      properties: ['openDirectory']
+    })
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: false, error: '未选择导出目录' }
+    }
+
+    const exportPath = result.filePaths[0]
+
+    // 复制所有文件
+    for (const filePath of filePaths) {
+      const fileName = path.basename(filePath)
+      const targetPath = path.join(exportPath, fileName)
+      await fs.promises.copyFile(filePath, targetPath)
+    }
+
+    return {
+      success: true,
+      exportPath
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    return {
+      success: false,
+      error: error.message || '导出失败'
+    }
+  }
+})

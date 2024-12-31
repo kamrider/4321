@@ -121,6 +121,29 @@ interface UploadAPI {
   }>
 }
 
+export interface IpcRenderer {
+  // 基础 IPC 方法
+  on(channel: string, func: (...args: any[]) => void): void
+  off(channel: string, func: (...args: any[]) => void): void
+  send(channel: string, ...args: any[]): void
+  invoke(channel: string, ...args: any[]): Promise<any>
+
+  // mistake 相关方法
+  mistake: {
+    getMistakes: () => Promise<Result<MistakeItem[]>>
+    getTrainingHistory: () => Promise<Result<MistakeItem[]>>
+  }
+
+  // 文件相关方法
+  file: {
+    export: (paths: string[]) => Promise<{
+      success: boolean
+      exportPath?: string
+      error?: string
+    }>
+  }
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
@@ -250,6 +273,11 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
         type: file.type
       })
     }
+  },
+
+  // 文件相关方法
+  file: {
+    export: (paths: string[]) => ipcRenderer.invoke('file:export', paths)
   }
 })
 

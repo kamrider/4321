@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
+import { ElMessage } from 'element-plus'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -118,10 +119,49 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
     return { text: `逾期 ${Math.abs(days)} 天`, status: 'overdue' }
   }
 }
+
+// 添加导出函数
+const exportImages = async () => {
+  try {
+    loading.value = true
+    // 获取所有错题的路径
+    const imagePaths = mistakeList.value
+      .filter(item => item.metadata?.type === 'mistake')
+      .map(item => item.path)
+    
+    if (imagePaths.length === 0) {
+      ElMessage.warning('没有可导出的错题')
+      return
+    }
+
+    // 通过 preload 定义的接口调用
+    const result = await window.ipcRenderer.file.export(imagePaths)
+    if (result.success) {
+      ElMessage.success(`导出成功，文件保存在: ${result.exportPath}`)
+    } else {
+      ElMessage.error(result.error || '导出失败')
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="mistake-container">
+    <!-- 添加顶部操作栏 -->
+    <div class="header">
+      <h2>错题列表</h2>
+      <div class="header-actions">
+        <el-button type="primary" @click="exportImages" :loading="loading">
+          导出错题
+        </el-button>
+      </div>
+    </div>
+
     <el-empty v-if="!loading && mistakeList.length === 0" description="暂无错题" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
@@ -446,5 +486,24 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
   width: 100%;
   max-height: 400px;
   object-fit: contain;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 20px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #303133;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
 }
 </style> 

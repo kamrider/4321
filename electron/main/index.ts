@@ -888,28 +888,28 @@ ipcMain.handle('file:get-training-history', async () => {
     const metadata = await metadataManager.getMetadata()
     const allFiles = Object.entries(metadata.files)
     
-    // 创建一个 Map 来存储所有文件
+    // 创建一个 Map 来存储需要训练的错题
     const fileMap = new Map()
     
-    // 第一步：处理所有文件的基本信息
+    // 第一步：找出所有需要训练的错题
     for (const [id, file] of allFiles) {
       try {
-        // 筛选条件：只处理错题类型的文件
+        // 只处理错题类型的文件
         if (file.type !== 'mistake') continue
 
-        const filePath = path.join(currentDir, file.relativePath)
-        const fileData = await fs.promises.readFile(filePath)
-        const fileExtension = path.extname(filePath).toLowerCase().slice(1)
-        const base64Data = fileData.toString('base64')
-        
         // 检查是否需要训练
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const nextTrainingDate = new Date(file.nextTrainingDate)
         nextTrainingDate.setHours(0, 0, 0, 0)
         
-        // 只添加今天需要训练或已经逾期的文件
+        // 只添加今天需要训练或已经逾期的错题
         if (nextTrainingDate <= today) {
+          const filePath = path.join(currentDir, file.relativePath)
+          const fileData = await fs.promises.readFile(filePath)
+          const fileExtension = path.extname(filePath).toLowerCase().slice(1)
+          const base64Data = fileData.toString('base64')
+          
           fileMap.set(id, {
             fileId: id,
             path: filePath,
@@ -931,14 +931,46 @@ ipcMain.handle('file:get-training-history', async () => {
       }
     }
     
-    // 第二步：处理配对关系
+    // 第二步：为每个错题找到对应的答案
     for (const [id, file] of allFiles) {
       if (fileMap.has(id) && file.isPaired && file.pairId) {
         const currentFile = fileMap.get(id)
-        const pairedFiles = Array.from(fileMap.values()).filter(
-          f => f.metadata.pairId === file.pairId && f.fileId !== id
-        )
-        currentFile.metadata.pairedWith = pairedFiles
+        const pairedAnswers = []
+
+        // 查找所有配对的答案
+        for (const [answerId, answerFile] of allFiles) {
+          if (answerFile.type === 'answer' && answerFile.pairId === file.pairId) {
+            try {
+              const answerPath = path.join(currentDir, answerFile.relativePath)
+              const answerData = await fs.promises.readFile(answerPath)
+              const answerExtension = path.extname(answerPath).toLowerCase().slice(1)
+              const answerBase64 = answerData.toString('base64')
+
+              pairedAnswers.push({
+                fileId: answerId,
+                path: answerPath,
+                preview: `data:image/${answerExtension};base64,${answerBase64}`,
+                uploadDate: answerFile.uploadDate,
+                originalDate: answerFile.originalDate,
+                originalFileName: answerFile.originalFileName,
+                fileSize: answerFile.fileSize,
+                lastModified: answerFile.lastModified,
+                hash: answerFile.hash,
+                metadata: {
+                  ...answerFile,
+                  pairedWith: null
+                }
+              })
+            } catch (error) {
+              console.error(`处理答案文件 ${answerId} 失败:`, error)
+            }
+          }
+        }
+
+        // 根据答案数量设置 pairedWith
+        if (pairedAnswers.length > 0) {
+          currentFile.metadata.pairedWith = pairedAnswers.length === 1 ? pairedAnswers[0] : pairedAnswers
+        }
       }
     }
     

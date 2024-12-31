@@ -1,5 +1,6 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+
 // 添加在文件开头的类型定义
 interface UploadError extends Error {
   code?: string
@@ -141,6 +142,11 @@ export interface IpcRenderer {
       exportPath?: string
       error?: string
     }>
+    exportTrainingHistory: () => Promise<{
+      success: boolean
+      exportPath?: string
+      error?: string
+    }>
   }
 }
 
@@ -277,7 +283,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
   // 文件相关方法
   file: {
-    export: (paths: string[]) => ipcRenderer.invoke('file:export', paths)
+    export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
+    exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history')
   }
 })
 
@@ -362,6 +369,7 @@ function useLoading() {
       safeDOM.remove(document.body, oDiv)
     },
   }
+
 }
 
 // ----------------------------------------------------------------------

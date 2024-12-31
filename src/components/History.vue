@@ -161,10 +161,34 @@ const handleCloseDialog = () => {
 const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
 }
+
+// 添加导出函数
+const exportHistory = async () => {
+  try {
+    loading.value = true
+    const result = await window.ipcRenderer.file.exportTrainingHistory()
+    if (result.success) {
+      ElMessage.success(`成功导出到: ${result.data.exportDir}`)
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="mistake-container">
+    <div class="header-actions">
+      <el-button type="primary" @click="exportHistory" :loading="loading">
+        导出训练历史
+      </el-button>
+    </div>
+    
     <el-empty v-if="!loading && historyList.length === 0" description="暂无错题" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
@@ -308,6 +332,12 @@ const toggleAnswer = () => {
   border-radius: 8px;
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-actions {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* 添加新样式 */

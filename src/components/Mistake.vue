@@ -226,10 +226,6 @@ const exportImages = async () => {
           fit="contain"
           class="detail-image"
         />
-        <div class="detail-info">
-          <p class="detail-filename">{{ activeItem.originalFileName }}</p>
-          <p class="detail-type">{{ activeItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
-        </div>
       </div>
       
       <div class="answer-control" v-if="activeItem.metadata?.isPaired">
@@ -249,17 +245,12 @@ const exportImages = async () => {
                :key="answer.fileId"
                class="answer-item"
           >
-            <h3 class="answer-title">答案 {{ index + 1 }}</h3>
             <el-image 
               :src="answer.preview"
               :preview-src-list="[answer.preview]"
               fit="contain"
               class="detail-image"
             />
-            <div class="detail-info">
-              <p class="detail-filename">{{ answer.originalFileName }}</p>
-              <p class="detail-type">答案</p>
-            </div>
           </div>
         </template>
         
@@ -271,10 +262,6 @@ const exportImages = async () => {
             fit="contain"
             class="detail-image"
           />
-          <div class="detail-info">
-            <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
-            <p class="detail-type">答案</p>
-          </div>
         </template>
       </div>
     </div>
@@ -436,56 +423,74 @@ const exportImages = async () => {
 
 /* 添加详情弹窗相关样式 */
 .mistake-detail-dialog :deep(.el-dialog__body) {
-  padding: 20px;
+  padding: 0;
+  height: calc(95vh - 100px);
+  overflow: hidden;
 }
 
 .detail-container {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  position: relative;
 }
 
-.answer-control {
+.mistake-section,
+.answer-section {
+  flex: 1;
   display: flex;
-  justify-content: center;
-  padding: 16px 0;
-  border-top: 1px solid var(--el-border-color-lighter);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  margin: 16px 0;
+  flex-direction: column;
 }
 
 .detail-image {
   width: 100%;
-  height: 70vh;
+  height: 100%;
   object-fit: contain;
-  border-radius: 8px;
   background-color: #f5f7fa;
 }
 
+.answer-control {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  z-index: 2001; /* 确保在弹窗之上 */
+}
+
 .answer-section {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-top: 20px;
 }
 
 .answer-item {
-  border: 1px solid #e6e6e6;
-  border-radius: 8px;
-  padding: 15px;
-  background: #f8f9fa;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.answer-item .detail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #f5f7fa;
 }
 
 .answer-title {
-  margin: 0 0 10px 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  margin: 0;
   font-size: 16px;
   color: #606266;
-}
-
-.detail-image {
-  width: 100%;
-  max-height: 400px;
-  object-fit: contain;
+  z-index: 1;
+  text-align: center;
 }
 
 .header {

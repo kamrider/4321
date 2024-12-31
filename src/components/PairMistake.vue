@@ -317,10 +317,6 @@ const handleConfirm = () => {
           fit="contain"
           class="detail-image"
         />
-        <div class="detail-info">
-          <p class="detail-filename">{{ activeItem.originalFileName }}</p>
-          <p class="detail-type">{{ activeItem.metadata?.type === 'mistake' ? '错题' : '答案' }}</p>
-        </div>
       </div>
       
       <div class="answer-control" v-if="activeItem.metadata?.isPaired">
@@ -340,17 +336,12 @@ const handleConfirm = () => {
                :key="answer.fileId"
                class="answer-item"
           >
-            <h3 class="answer-title">答案 {{ index + 1 }}</h3>
             <el-image 
               :src="answer.preview"
               :preview-src-list="[answer.preview]"
               fit="contain"
               class="detail-image"
             />
-            <div class="detail-info">
-              <p class="detail-filename">{{ answer.originalFileName }}</p>
-              <p class="detail-type">答案</p>
-            </div>
           </div>
         </template>
         
@@ -362,10 +353,6 @@ const handleConfirm = () => {
             fit="contain"
             class="detail-image"
           />
-          <div class="detail-info">
-            <p class="detail-filename">{{ activeItem.metadata.pairedWith.originalFileName }}</p>
-            <p class="detail-type">答案</p>
-          </div>
         </template>
       </div>
     </div>
@@ -618,5 +605,77 @@ const handleConfirm = () => {
   width: 100%;
   max-height: 400px;
   object-fit: contain;
+}
+
+/* 添加详情弹窗相关样式 */
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 0;  /* 移除内边距以便图片充满弹窗 */
+  height: calc(95vh - 100px);  /* 增加高度到95vh */
+  overflow: hidden;  /* 防止出现滚动条 */
+}
+
+.detail-container {
+  height: 100%;  /* 让容器占满整个高度 */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.mistake-section,
+.answer-section {
+  flex: 1;  /* 让图片区域占满剩余空间 */
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-image {
+  width: 100%;
+  height: 100%;  /* 让图片占满整个区域 */
+  object-fit: contain;  /* 保持图片比例 */
+  background-color: #f5f7fa;
+}
+
+.answer-control {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  z-index: 2001; /* 确保在弹窗之上 */
+}
+
+.answer-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.answer-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.answer-item .detail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #f5f7fa;
+}
+
+.answer-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-size: 16px;
+  color: #606266;
+  z-index: 1;
+  text-align: center;
 }
 </style>

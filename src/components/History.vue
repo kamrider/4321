@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { Timer } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
@@ -11,6 +12,19 @@ const error = ref<string | null>(null)
 const dialogVisible = ref(false)
 const activeItem = ref<HistoryItem | null>(null)
 const showAnswer = ref(false)
+
+// 添加计时器相关的响应式变量
+const time = ref(0)
+const timerInterval = ref<number | null>(null)
+
+// 格式化时间显示，包含毫秒
+const formattedTime = computed(() => {
+  const totalMs = time.value * 10 // 因为我们每10ms更新一次
+  const minutes = Math.floor(totalMs / 60000)
+  const seconds = Math.floor((totalMs % 60000) / 1000)
+  const ms = Math.floor((totalMs % 1000) / 10)
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
+})
 
 onMounted(async () => {
   try {
@@ -90,8 +104,107 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
   }
 }
 
+// 修改答题函数，使用正确的 submitResult 方法
+const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
+  // 停止计时
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+
+  // 记录答题时间（毫秒）
+  const answerTime = time.value * 10
+
+  try {
+    const result = await window.ipcRenderer.training.submitResult(item.fileId, remembered)
+    if (result.success) {
+      ElMessage.success(remembered ? '太棒了！继续保持！' : '没关系，下次继续加油！')
+      // 更新列表
+      const nextTraining = await window.ipcRenderer.training.getNextTraining(item.fileId)
+      if (nextTraining.success) {
+        // 更新列表中对应项的训练信息
+        const listItem = historyList.value.find(i => i.fileId === item.fileId)
+        if (listItem && listItem.metadata) {
+          listItem.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
+          listItem.metadata.proficiency = nextTraining.data.currentProficiency
+          listItem.metadata.trainingInterval = nextTraining.data.currentInterval
+        }
+      }
+    }
+  } catch (error) {
+    console.error('提交答案失败:', error)
+    ElMessage.error('提交答案失败')
+  }
+
+  dialogVisible.value = false
+}
+
+// 修改预览处理函数，添加计时器启动
+const handleViewDetail = (item: HistoryItem) => {
+  activeItem.value = item
+  dialogVisible.value = true
+  // 开始计时，每10ms更新一次以显示毫秒
+  time.value = 0
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+  }
+  timerInterval.value = setInterval(() => {
+    time.value++
+  }, 10)
+}
+
+// 修改关闭预览处理函数，添加计时器清理
+const handleCloseDialog = () => {
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+  dialogVisible.value = false
+  activeItem.value = null
+  showAnswer.value = false
+}
+
+// 添加切换答案显示的函数
+const toggleAnswer = () => {
+  showAnswer.value = !showAnswer.value
+}
+
+// 添加导出函数
+const exportHistory = async () => {
+  try {
+    loading.value = true
+    const result = await window.ipcRenderer.file.exportTrainingHistory()
+    if (result.success) {
+      ElMessage.success(`成功导出到: ${result.data.exportDir}`)
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 确保在组件卸载时清理计时器
+onUnmounted(() => {
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+  }
+})
+
 // 提交训练结果的方法
 const submitTraining = async (fileId: string, success: boolean) => {
+  // 停止计时
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+
+  // 记录答题时间（毫秒）
+  const answerTime = time.value * 10
+
   try {
     const result = await window.ipcRenderer.training.submitResult(fileId, success)
     if (result.success) {
@@ -123,60 +236,27 @@ const submitTraining = async (fileId: string, success: boolean) => {
           item.metadata.proficiency = nextTraining.data.currentProficiency
           item.metadata.trainingInterval = nextTraining.data.currentInterval
           
-          // 添加新记录
+          // 添加新记录，包含答题时间
           item.metadata.trainingRecords.push({
             date: new Date().toISOString(),
             result: success ? 'success' : 'fail',
             proficiencyBefore: item.metadata.proficiency,
             proficiencyAfter: nextTraining.data.currentProficiency,
             intervalAfter: nextTraining.data.currentInterval,
-            isOnTime: true
+            isOnTime: true,
+            answerTime // 添加答题时间
           })
         }
       }
       ElMessage.success('训练记录已保存')
+      // 关闭对话框
+      dialogVisible.value = false
     } else {
       throw new Error(result.error)
     }
   } catch (error) {
     console.error('提交训练结果失败:', error)
     ElMessage.error('提交训练结果失败')
-  }
-}
-
-// 添加预览处理函数
-const handleViewDetail = (item: HistoryItem) => {
-  activeItem.value = item
-  dialogVisible.value = true
-}
-
-// 添加关闭预览处理函数
-const handleCloseDialog = () => {
-  dialogVisible.value = false
-  activeItem.value = null
-  showAnswer.value = false
-}
-
-// 添加切换答案显示的函数
-const toggleAnswer = () => {
-  showAnswer.value = !showAnswer.value
-}
-
-// 添加导出函数
-const exportHistory = async () => {
-  try {
-    loading.value = true
-    const result = await window.ipcRenderer.file.exportTrainingHistory()
-    if (result.success) {
-      ElMessage.success(`成功导出到: ${result.data.exportDir}`)
-    } else {
-      throw new Error(result.error)
-    }
-  } catch (error) {
-    console.error('导出失败:', error)
-    ElMessage.error('导出失败')
-  } finally {
-    loading.value = false
   }
 }
 </script>
@@ -234,7 +314,7 @@ const exportHistory = async () => {
                   type="success" 
                   size="small"
                   :disabled="formatTrainingStatus(item.metadata.nextTrainingDate).status === 'pending'"
-                  @click="submitTraining(item.fileId, true)"
+                  @click="handleRemembered(item, true)"
                 >
                   记住了
                 </el-button>
@@ -242,7 +322,7 @@ const exportHistory = async () => {
                   type="danger" 
                   size="small"
                   :disabled="formatTrainingStatus(item.metadata.nextTrainingDate).status === 'pending'"
-                  @click="submitTraining(item.fileId, false)"
+                  @click="handleRemembered(item, false)"
                 >
                   没记住
                 </el-button>
@@ -262,6 +342,40 @@ const exportHistory = async () => {
     :before-close="handleCloseDialog"
     class="mistake-detail-dialog"
   >
+    <!-- 秒表显示 -->
+    <div class="timer-container">
+      <div class="timer-display">
+        <el-icon class="timer-icon"><Timer /></el-icon>
+        <span class="timer-text">{{ formattedTime }}</span>
+      </div>
+    </div>
+
+    <!-- 左侧"记住了"按钮 -->
+    <div class="side-button left-button">
+      <el-button 
+        type="success" 
+        size="large"
+        round
+        :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
+        @click="activeItem && submitTraining(activeItem.fileId, true)"
+      >
+        记住了
+      </el-button>
+    </div>
+
+    <!-- 右侧"没记住"按钮 -->
+    <div class="side-button right-button">
+      <el-button 
+        type="danger" 
+        size="large"
+        round
+        :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
+        @click="activeItem && submitTraining(activeItem.fileId, false)"
+      >
+        没记住
+      </el-button>
+    </div>
+
     <div class="detail-container" v-if="activeItem">
       <div class="mistake-section">
         <el-image 
@@ -525,5 +639,71 @@ const exportHistory = async () => {
   height: 100%;
   object-fit: contain;
   background-color: #f5f7fa;
+}
+
+.mistake-detail-dialog :deep(.el-dialog) {
+  position: relative;
+}
+
+.timer-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  background-color: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+  z-index: 2001;
+}
+
+.timer-display {
+  display: flex;
+  align-items: center;
+  font-size: 28px;
+  color: #409EFF;
+}
+
+.timer-icon {
+  margin-right: 10px;
+  font-size: 28px;
+}
+
+.timer-text {
+  font-family: monospace;
+  font-weight: bold;
+}
+
+.side-button {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2001;
+}
+
+.left-button {
+  left: 40px;
+}
+
+.right-button {
+  right: 40px;
+}
+
+/* 让按钮更明显 */
+.side-button :deep(.el-button) {
+  padding: 20px 30px;
+  font-size: 18px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.side-button :deep(.el-button:hover) {
+  transform: scale(1.05);
+  transition: transform 0.2s;
+}
+
+/* 调整对话框内容，防止被按钮遮挡 */
+.detail-container {
+  margin: 60px 100px 0; /* 上方留出空间给计时器 */
 }
 </style> 

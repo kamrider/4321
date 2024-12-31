@@ -1164,3 +1164,43 @@ ipcMain.handle('file:export-training-history', async () => {
     }
   }
 })
+
+// 添加文件删除处理
+ipcMain.handle('file:delete', async (event, fileId: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    const fileMetadata = metadata.files[fileId]
+    
+    if (!fileMetadata) {
+      throw new Error('文件不存在')
+    }
+
+    // 1. 先删除实际文件
+    // 文件路径应该是 memberDir/files/relativePath，而不是 memberDir/files/files/relativePath
+    const filePath = path.join(
+      metadataManager.getCurrentMemberDir(),
+      fileMetadata.relativePath
+    )
+    
+    try {
+      await fs.promises.unlink(filePath)
+    } catch (error) {
+      console.error('删除文件失败:', error)
+      throw new Error(`删除文件失败: ${error.message}`)
+    }
+    
+    // 2. 删除成功后，再删除元数据
+    delete metadata.files[fileId]
+    await metadataManager.saveMetadata()
+
+    return {
+      success: true
+    }
+  } catch (error) {
+    console.error('删除操作失败:', error)
+    return {
+      success: false,
+      error: error.message || '删除失败'
+    }
+  }
+})

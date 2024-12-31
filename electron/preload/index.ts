@@ -147,6 +147,10 @@ export interface IpcRenderer {
       exportPath?: string
       error?: string
     }>
+    delete: (fileId: string) => Promise<{
+      success: boolean
+      error?: string
+    }>
   }
 }
 
@@ -284,7 +288,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // 文件相关方法
   file: {
     export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
-    exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history')
+    exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history'),
+    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId)
   }
 })
 

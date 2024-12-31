@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -148,6 +149,55 @@ const exportImages = async () => {
     loading.value = false
   }
 }
+
+// 添加删除处理函数
+const handleDelete = async (item: MistakeItem) => {
+  try {
+    // 显示确认对话框
+    await ElMessageBox.confirm(
+      item.metadata?.isPaired 
+        ? '此操作将删除错题及其对应的答案，是否继续？'
+        : '确定要删除这个错题吗？',
+      '警告',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    loading.value = true
+
+    // 如果是配对的错题，需要同时删除答案
+    if (item.metadata?.isPaired && item.metadata?.pairId) {
+      // 找到所有配对的答案
+      const pairedAnswers = mistakeList.value.filter(
+        m => m.metadata?.pairId === item.metadata?.pairId && m.fileId !== item.fileId
+      )
+
+      // 删除所有配对的答案
+      for (const answer of pairedAnswers) {
+        await window.ipcRenderer.file.delete(answer.fileId)
+      }
+    }
+
+    // 删除错题本身
+    const result = await window.ipcRenderer.file.delete(item.fileId)
+    if (result.success) {
+      // 从列表中移除
+      mistakeList.value = mistakeList.value.filter(i => i.fileId !== item.fileId)
+      ElMessage.success('删除成功')
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    if (error === 'cancel') return
+    console.error('删除失败:', error)
+    ElMessage.error('删除失败')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
@@ -176,6 +226,15 @@ const exportImages = async () => {
                  'is-paired': item.metadata?.isPaired
                }"
                @click="item.metadata?.isPaired ? handleViewDetail(item) : null">
+            <el-button
+              class="delete-btn"
+              type="danger"
+              circle
+              size="small"
+              @click.stop="handleDelete(item)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
             <el-image 
               :src="item.preview" 
               :preview-src-list="[]"
@@ -510,5 +569,18 @@ const exportImages = async () => {
 .header-actions {
   display: flex;
   gap: 10px;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.preview-item:hover .delete-btn {
+  opacity: 1;
 }
 </style> 

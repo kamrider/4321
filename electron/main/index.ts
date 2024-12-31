@@ -140,8 +140,15 @@ async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: st
     const fileName = path.basename(filePath)
     // 先保存到临时目录
     const tempPath = path.join(getTempDirectory(), fileName)
+    // 获取当前用户目录
+    const currentMemberDir = metadataManager.getCurrentMemberDir()
     // 最终目标路径
-    const targetPath = path.join(targetDirectory, fileName)
+    const targetPath = path.join(currentMemberDir, fileName)
+    
+    // 确保目标目录存在
+    if (!fs.existsSync(currentMemberDir)) {
+      fs.mkdirSync(currentMemberDir, { recursive: true })
+    }
     
     // 复制到临时目录
     await fs.promises.copyFile(filePath, tempPath)
@@ -409,6 +416,13 @@ ipcMain.handle('file:upload', async (event, tempPaths) => {
   isAllCancelled = false;
   paths.forEach(path => cancelMap[path] = false);
   
+  // 获取当前用户目录
+  const currentMemberDir = metadataManager.getCurrentMemberDir()
+  // 确保目标目录存在
+  if (!fs.existsSync(currentMemberDir)) {
+    fs.mkdirSync(currentMemberDir, { recursive: true })
+  }
+  
   const results = await Promise.all(
     paths.map(async tempPath => {
       try {
@@ -418,7 +432,7 @@ ipcMain.handle('file:upload', async (event, tempPaths) => {
         }
 
         const fileName = path.basename(tempPath).replace('temp-', '');
-        const targetPath = path.join(targetDirectory, fileName);
+        const targetPath = path.join(currentMemberDir, fileName);
         
         // 复制到目标目录
         await fs.promises.copyFile(tempPath, targetPath);

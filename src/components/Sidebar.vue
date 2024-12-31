@@ -24,44 +24,22 @@
         <template #title>训练内容</template>
       </el-menu-item>
 
-      <el-menu-item index="/settings">
-        <el-icon><Setting /></el-icon>
-        <template #title>设置</template>
-      </el-menu-item>
-    </el-menu>
+    <el-menu-item index="/members">
+      <el-icon><User /></el-icon>
+      <template #title>成员管理</template>
+    </el-menu-item>
 
-    <div class="user-info">
-      <el-dropdown @command="handleUserCommand">
-        <div class="user-dropdown-link">
-          <el-avatar :size="32" icon="UserFilled" />
-          <span class="username">{{ currentUser?.username || '未登录' }}</span>
-          <el-icon><CaretBottom /></el-icon>
-        </div>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item 
-              v-for="user in users" 
-              :key="user.id"
-              :command="{ type: 'switch', userId: user.id }"
-              :disabled="user.id === currentUser?.id"
-            >
-              切换到: {{ user.username }}
-            </el-dropdown-item>
-            <el-dropdown-item divided command="logout">
-              退出登录
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-    </div>
-  </div>
+    <el-menu-item index="/settings">
+      <el-icon><Setting /></el-icon>
+      <template #title>设置</template>
+    </el-menu-item>
+  </el-menu>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Upload, DocumentCopy, Notebook, Setting } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Upload, DocumentCopy, Notebook, Setting, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

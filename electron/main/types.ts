@@ -26,6 +26,9 @@ interface FileMetadata {
   subject: string             
   tags: string[]              
   notes?: string              
+  type?: 'mistake' | 'answer'    // 图片类型
+  pairId?: string               // 配对的图片ID
+  isPaired?: boolean           // 是否已配对
 }
 
 interface MetadataStore {

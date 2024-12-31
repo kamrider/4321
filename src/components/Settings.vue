@@ -1,29 +1,37 @@
 <template>
   <div class="settings-wrapper">
     <div class="settings-content">
-      <el-card class="settings-card">
-        <template #header>
-          <div class="card-header">
-            <span>存储设置</span>
-          </div>
-        </template>
-        
-        <div class="storage-path">
-          <span class="label">当前存储路径：</span>
-          <el-input
-            v-model="storagePath"
-            readonly
-            :placeholder="storagePath || '未设置存储路径'"
-          >
-            <template #append>
-              <el-button @click="handleSetStoragePath">
-                <el-icon><Folder /></el-icon>
-                选择路径
-              </el-button>
+      <el-tabs>
+        <el-tab-pane label="存储设置">
+          <el-card class="settings-card">
+            <template #header>
+              <div class="card-header">
+                <span>存储设置</span>
+              </div>
             </template>
-          </el-input>
-        </div>
-      </el-card>
+            
+            <div class="storage-path">
+              <span class="label">当前存储路径：</span>
+              <el-input
+                v-model="storagePath"
+                readonly
+                :placeholder="storagePath || '未设置存储路径'"
+              >
+                <template #append>
+                  <el-button @click="handleSetStoragePath">
+                    <el-icon><Folder /></el-icon>
+                    选择路径
+                  </el-button>
+                </template>
+              </el-input>
+            </div>
+          </el-card>
+        </el-tab-pane>
+
+        <el-tab-pane label="训练配置">
+          <TrainingConfigPanel />
+        </el-tab-pane>
+      </el-tabs>
     </div>
   </div>
 </template>
@@ -32,12 +40,13 @@
 import { ref, onMounted } from 'vue'
 import { Folder } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import TrainingConfigPanel from './TrainingConfigPanel.vue'
 
 const storagePath = ref('')
 
 onMounted(async () => {
   try {
-    storagePath.value = await window.ipcRenderer.uploadFile.getStoragePath()
+    storagePath.value = await window.ipcRenderer.invoke('file:get-storage-path')
   } catch (error) {
     console.error('获取存储路径失败:', error)
   }
@@ -45,7 +54,7 @@ onMounted(async () => {
 
 const handleSetStoragePath = async () => {
   try {
-    const result = await window.ipcRenderer.uploadFile.setStoragePath()
+    const result = await window.ipcRenderer.invoke('file:set-storage-path')
     if (result.success) {
       storagePath.value = result.path
       ElMessage.success('存储路径设置成功')
@@ -109,5 +118,9 @@ const handleSetStoragePath = async () => {
 :deep(.el-icon) {
   margin-right: 8px;
   font-size: 16px;
+}
+
+:deep(.el-tabs__content) {
+  padding: 20px 0;
 }
 </style> 

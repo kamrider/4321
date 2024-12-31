@@ -7,24 +7,46 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+.DS_Store
 dist
 dist-ssr
-dist-electron
+dist_electron
 release
+coverage
 *.local
 
 # Editor directories and files
-.vscode/.debug.env
+.vscode/*
+!.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# lockfile
+# Electron-builder output
+/dist_electron
+/release
+
+# Optional
+*.lock
 package-lock.json
-pnpm-lock.yaml
 yarn.lock
+pnpm-lock.yaml
+
+# 构建输出
+/dist
+/dist-electron
+/dist_electron
+/release_builds
+/release
+
+# 依赖
+/node_modules
+
+# 其他生成的文件
+*.exe
+*.blockmap

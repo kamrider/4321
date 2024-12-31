@@ -7,21 +7,19 @@ import { app } from 'electron'
 const METADATA_FILE = '.metadata.json'
 
 export class MetadataManager {
-  private baseDir: string | null = null
-  private metadataPath: string | null = null
-  private metadata: MetadataStore | null = null
+  private metadataPath: string
+  private baseDir: string
+  private metadata: MetadataStore
+  private membersDir: string
+  private currentMember: string | null = null
 
-  constructor(initialPath: string | null = null) {
-    if (initialPath) {
-      this.setUserStoragePath(initialPath)
-    }
-  }
-
-  setUserStoragePath(userId: string) {
-    const userDir = path.join(app.getPath('userData'), 'users', userId)
-    this.baseDir = path.join(userDir, 'images')
-    this.metadataPath = path.join(userDir, 'metadata.json')
+  constructor(storageDir: string) {
+    this.baseDir = storageDir
+    this.membersDir = path.join(storageDir, 'members')
+    this.metadataPath = path.join(storageDir, METADATA_FILE)
+    this.metadata = this.createDefaultStore(storageDir)
     this.loadMetadata()
+    this.initializeMembersDirectory()
   }
 
   private createDefaultStore(baseDir: string): MetadataStore {
@@ -59,6 +57,9 @@ export class MetadataManager {
       subject: '',
       tags: ['未分类'],
       trainingRecords: [],
+      type: 'mistake',
+      pairId: null,
+      isPaired: false
     }
   }
 
@@ -127,6 +128,10 @@ export class MetadataManager {
         // 更新基础目录为当前目录
         parsed.baseDir = this.baseDir
         this.metadata = parsed
+      } else {
+        // 如果元数据文件不存在，创建一个新的
+        this.metadata = this.createDefaultStore(this.baseDir)
+        this.saveMetadata()
       }
     } catch (error) {
       console.error('加载元数据失败:', error)
@@ -181,32 +186,68 @@ export class MetadataManager {
     const errors: string[] = []
     const oldPath = this.baseDir
     const oldMetadataPath = this.metadataPath
+    const newMetadataPath = path.join(newPath, METADATA_FILE)
 
     try {
       await fs.promises.mkdir(newPath, { recursive: true })
       
-      // 先复制元数据文件到新路径
-      const newMetadataPath = path.join(newPath, METADATA_FILE)
-      await fs.promises.copyFile(oldMetadataPath, newMetadataPath)
+      // 检查新路径是否已经存在 metadata 文件
+      let existingMetadata: MetadataStore | null = null
+      if (fs.existsSync(newMetadataPath)) {
+        try {
+          const existingData = await fs.promises.readFile(newMetadataPath, 'utf-8')
+          existingMetadata = JSON.parse(existingData)
+          console.log('发现目标路径已有 metadata:', existingMetadata)
+        } catch (error) {
+          console.error('读取目标路径 metadata 失败:', error)
+          errors.push(`读取目标路径 metadata 失败: ${error.message}`)
+        }
+      }
       
-      // 开始迁移文件
+      // 如果存在有效的 metadata，合并它
+      if (existingMetadata?.files) {
+        // 合并文件记录
+        for (const [id, file] of Object.entries(existingMetadata.files)) {
+          // 检查文件是否真实存在
+          const filePath = path.join(newPath, file.relativePath)
+          if (fs.existsSync(filePath)) {
+            // 如果文件 ID 已存在，生成新的 ID
+            let newId = id
+            while (this.metadata.files[newId]) {
+              newId = uuidv4()
+            }
+            this.metadata.files[newId] = {
+              ...file,
+              id: newId,
+              relativePath: file.relativePath
+            }
+          }
+        }
+      }
+      
+      // 复制当前文件到新路径
       for (const [id, metadata] of Object.entries(this.metadata.files)) {
         const oldFilePath = path.join(oldPath, metadata.relativePath)
         const newFilePath = path.join(newPath, metadata.relativePath)
         
         try {
+          // 确保目标目录存在
           await fs.promises.mkdir(path.dirname(newFilePath), { recursive: true })
-          await fs.promises.copyFile(oldFilePath, newFilePath)
           
-          // 验证新文件
-          const oldHash = await this.calculateFileHash(oldFilePath)
-          const newHash = await this.calculateFileHash(newFilePath)
-          
-          if (oldHash === newHash) {
-            // 迁移成功，删除旧文件
-            await fs.promises.unlink(oldFilePath)
-          } else {
-            throw new Error('文件验证失败')
+          // 如果文件在源路径存在，才进行复制
+          if (fs.existsSync(oldFilePath)) {
+            await fs.promises.copyFile(oldFilePath, newFilePath)
+            
+            // 验证新文件
+            const oldHash = await this.calculateFileHash(oldFilePath)
+            const newHash = await this.calculateFileHash(newFilePath)
+            
+            if (oldHash === newHash) {
+              // 迁移成功，删除旧文件
+              await fs.promises.unlink(oldFilePath)
+            } else {
+              throw new Error('文件验证失败')
+            }
           }
         } catch (error) {
           errors.push(`文件 ${metadata.originalFileName} 迁移失败: ${error.message}`)
@@ -221,16 +262,19 @@ export class MetadataManager {
         await this.saveMetadata()
         
         // 删除旧的元数据文件
-        await fs.promises.unlink(oldMetadataPath)
+        if (fs.existsSync(oldMetadataPath)) {
+          await fs.promises.unlink(oldMetadataPath)
+        }
       } else {
         // 如果有错误，删除新的元数据文件
-        await fs.promises.unlink(newMetadataPath)
+        if (fs.existsSync(newMetadataPath)) {
+          await fs.promises.unlink(newMetadataPath)
+        }
       }
 
       return { success: errors.length === 0, errors }
     } catch (error) {
       // 如果发生错误，确保删除新的元数据文件
-      const newMetadataPath = path.join(newPath, METADATA_FILE)
       if (fs.existsSync(newMetadataPath)) {
         await fs.promises.unlink(newMetadataPath)
       }
@@ -242,5 +286,138 @@ export class MetadataManager {
     // 在返回之前验证一下元数据
     this.validateMetadata()
     return this.metadata
+  }
+
+  private async initializeMembersDirectory() {
+    // 确保 members 目录存在
+    if (!fs.existsSync(this.membersDir)) {
+      await fs.promises.mkdir(this.membersDir, { recursive: true })
+    }
+
+    // 如果没有成员，创建默认成员
+    const members = await this.getMembers()
+    if (members.length === 0) {
+      await this.createMember('default')
+    }
+
+    // 如果没有当前成员，设置为第一个成员
+    if (!this.currentMember) {
+      const members = await this.getMembers()
+      if (members.length > 0) {
+        await this.switchMember(members[0])
+      }
+    }
+  }
+
+  // 获取所有成员列表
+  async getMembers(): Promise<string[]> {
+    try {
+      const items = await fs.promises.readdir(this.membersDir, { withFileTypes: true })
+      return items
+        .filter(item => item.isDirectory())
+        .map(item => item.name)
+    } catch (error) {
+      console.error('获取成员列表失败:', error)
+      return []
+    }
+  }
+
+  // 创建新成员
+  async createMember(memberName: string): Promise<boolean> {
+    try {
+      const memberDir = path.join(this.membersDir, memberName)
+      const memberFilesDir = path.join(memberDir, 'files')
+      
+      // 检查成员是否已存在
+      if (fs.existsSync(memberDir)) {
+        throw new Error(`成员 ${memberName} 已存在`)
+      }
+
+      // 创建成员目录结构
+      await fs.promises.mkdir(memberDir, { recursive: true })
+      await fs.promises.mkdir(memberFilesDir, { recursive: true })
+      
+      // 创建成员的 metadata 文件
+      const memberMetadataPath = path.join(memberDir, METADATA_FILE)
+      const initialMetadata = this.createDefaultStore(memberFilesDir)
+      await fs.promises.writeFile(
+        memberMetadataPath,
+        JSON.stringify(initialMetadata, null, 2)
+      )
+
+      return true
+    } catch (error) {
+      console.error(`创建成员 ${memberName} 失败:`, error)
+      return false
+    }
+  }
+
+  // 切换到指定成员
+  async switchMember(memberName: string): Promise<boolean> {
+    try {
+      const memberDir = path.join(this.membersDir, memberName)
+      const memberFilesDir = path.join(memberDir, 'files')
+      const memberMetadataPath = path.join(memberDir, METADATA_FILE)
+
+      // 检查成员是否存在
+      if (!fs.existsSync(memberDir)) {
+        throw new Error(`成员 ${memberName} 不存在`)
+      }
+
+      // 更新当前路径
+      this.currentMember = memberName
+      this.baseDir = memberFilesDir
+      this.metadataPath = memberMetadataPath
+      
+      // 加载新的 metadata
+      this.loadMetadata()
+
+      // 保存当前成员到配置文件
+      const currentMemberPath = path.join(this.membersDir, 'current.txt')
+      await fs.promises.writeFile(currentMemberPath, memberName, 'utf-8')
+
+      return true
+    } catch (error) {
+      console.error(`切换到成员 ${memberName} 失败:`, error)
+      return false
+    }
+  }
+
+  // 删除成员
+  async deleteMember(memberName: string): Promise<boolean> {
+    try {
+      // 不允许删除当前成员
+      if (memberName === this.currentMember) {
+        throw new Error('不能删除当前使用的成员')
+      }
+
+      const memberDir = path.join(this.membersDir, memberName)
+      
+      // 检查成员是否存在
+      if (!fs.existsSync(memberDir)) {
+        throw new Error(`成员 ${memberName} 不存在`)
+      }
+
+      // 删除成员目录
+      await fs.promises.rm(memberDir, { recursive: true })
+
+      return true
+    } catch (error) {
+      console.error(`删除成员 ${memberName} 失败:`, error)
+      return false
+    }
+  }
+
+  // 获取当前成员目录
+  getCurrentMemberDir(): string {
+    if (!this.currentMember) {
+      throw new Error('未选择成员')
+    }
+    return path.join(this.membersDir, this.currentMember, 'files')
+  }
+
+  // 获取当前成员
+  getCurrentMember(): string | null {
+    return this.currentMember
   }
 } 

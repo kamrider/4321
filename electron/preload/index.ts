@@ -1,5 +1,6 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+
 // 添加在文件开头的类型定义
 interface UploadError extends Error {
   code?: string
@@ -58,6 +59,9 @@ export interface MistakeItem {
     tags: string[]
     notes: string
     trainingRecords: TrainingRecord[]
+    type?: 'mistake' | 'answer'
+    pairId?: string
+    isPaired?: boolean
   }
 }
 
@@ -78,6 +82,76 @@ interface TrainingNextInfo {
   nextTrainingDate: string
   currentProficiency: number
   currentInterval: number
+}
+
+// 在现有的接口定义中添加配置相关的类型
+interface TrainingConfig {
+  baseAdjustment: {
+    success: number
+    fail: number
+  }
+  intervalMultiplier: {
+    success: number
+    fail: number
+  }
+  timeRules: Array<{
+    range: [number, number]
+    bonus: number
+    description: string
+  }>
+  proficiencyThresholds: {
+    low: number
+    medium: number
+    high: number
+  }
+  intervals: {
+    min: number
+    max: number
+  }
+}
+
+// 添加类型定义
+interface UploadAPI {
+  uploadFile: (filePaths: string[]) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  uploadPastedFile: (file: File) => Promise<{
+    success: boolean
+    error?: string
+  }>
+}
+
+export interface IpcRenderer {
+  // 基础 IPC 方法
+  on(channel: string, func: (...args: any[]) => void): void
+  off(channel: string, func: (...args: any[]) => void): void
+  send(channel: string, ...args: any[]): void
+  invoke(channel: string, ...args: any[]): Promise<any>
+
+  // mistake 相关方法
+  mistake: {
+    getMistakes: () => Promise<Result<MistakeItem[]>>
+    getTrainingHistory: () => Promise<Result<MistakeItem[]>>
+  }
+
+  // 文件相关方法
+  file: {
+    export: (paths: string[]) => Promise<{
+      success: boolean
+      exportPath?: string
+      error?: string
+    }>
+    exportTrainingHistory: () => Promise<{
+      success: boolean
+      exportPath?: string
+      error?: string
+    }>
+    delete: (fileId: string) => Promise<{
+      success: boolean
+      error?: string
+    }>
+  }
 }
 
 // --------- Expose some API to the Renderer process ---------
@@ -122,108 +196,35 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // 添加文件操作相关的方法
   uploadFile: {
     // 选择文件
-    select: async () => {
-      try {
-        return await ipcRenderer.invoke('file:select');
-      } catch (error) {
-        console.error('Error selecting file:', error);
-        throw error;
-      }
-    },
+    select: () => ipcRenderer.invoke('file:select'),
     
-    // 开始上传文件
-    start: (filePaths: string | string[]) => {
-      const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
-      
-      if (paths.length === 0) {
-        throw new Error('没有提供要上传的文件')
-      }
-      
-      const invalidPaths = paths.filter(path => !validatePath(path))
-      if (invalidPaths.length > 0) {
-        throw new Error(`以下文件路径无效: ${invalidPaths.join(', ')}`)
-      }
-      
-      return ipcRenderer.invoke('file:upload', paths)
-    },
+    // 获取预览
+    getPreview: (filePath: string) => ipcRenderer.invoke('file:preview', filePath),
     
-    // 获取上传进度
-    onProgress: (callback: (progress: UploadProgress) => void) => {
-      const listener = (_event: any, progress: UploadProgress) => callback(progress)
-      ipcRenderer.on('file:progress', listener)
-      return () => ipcRenderer.removeListener('file:progress', listener)
-    },
+    // 开始上传
+    start: (filePaths: string[]) => ipcRenderer.invoke('file:upload', filePaths),
     
     // 取消上传
-    cancel: async (filePath?: string) => {
-      try {
-        const result = await ipcRenderer.invoke('file:cancel', filePath)
-        return { success: true, result }
-      } catch (error) {
-        console.error('Error canceling upload:', error)
-        return { success: false, error }
-      }
-    },
+    cancel: (filePath?: string) => ipcRenderer.invoke('file:cancel', filePath),
     
-    // 获取文件预览
-    getPreview: async (filePath: string) => {
-      try {
-        return await ipcRenderer.invoke('file:preview', filePath);
-      } catch (error) {
-        console.error('Error getting file preview:', error);
-        throw error;
+    // 清理临时文件
+    cleanupTemp: (filePath?: string) => ipcRenderer.invoke('file:cleanup-temp', filePath),
+    
+    // 粘贴上传
+    uploadPastedFile: (data: { buffer: ArrayBuffer, type: string, name: string }) => 
+      ipcRenderer.invoke('file:upload-paste', data),
+    
+    // 处理拖拽文件
+    handleDrop: (filePath: string) => ipcRenderer.invoke('file:handle-drop', filePath),
+    
+    // 监听进度
+    onProgress: (callback: (progress: any) => void) => {
+      const progressListener = (_: any, value: any) => callback(value)
+      ipcRenderer.on('file:progress', progressListener)
+      return () => {
+        ipcRenderer.removeListener('file:progress', progressListener)
       }
-    },
-
-    // 获取存储路径
-    getStoragePath: async () => {
-      try {
-        return await ipcRenderer.invoke('file:get-storage-path');
-      } catch (error) {
-        console.error('Error getting storage path:', error);
-        throw error;
-      }
-    },
-
-    // 设置存储路径
-    setStoragePath: async () => {
-      try {
-        return await ipcRenderer.invoke('file:set-storage-path');
-      } catch (error) {
-        console.error('Error setting storage path:', error);
-        throw error;
-      }
-    },
-
-    // 重置存储路径
-    resetStoragePath: async () => {
-      try {
-        return await ipcRenderer.invoke('file:reset-storage-path');
-      } catch (error) {
-        console.error('Error resetting storage path:', error);
-        throw error;
-      }
-    },
-
-    // 获取元数据
-    getMetadata: async () => {
-      try {
-        return await ipcRenderer.invoke('file:get-metadata')
-      } catch (error) {
-        console.error('Error getting metadata:', error)
-        throw error
-      }
-    },
-
-    // 获取错题列表
-    getMistakes: async () => {
-      try {
-        return await ipcRenderer.invoke('file:get-mistakes')
-      } catch (error) {
-        console.error('Error getting mistakes:', error)
-        throw error
-      }
-    },
+    }
   },
 
   // 添加训练相关方法
@@ -248,6 +249,67 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       }
       return await ipcRenderer.invoke('training:get-next', fileId)
     }
+  },
+
+  // 添加 metadata 相关方法
+  metadata: {
+    // 添加 updateType 方法
+    updateType: (fileId: string, type: 'mistake' | 'answer') => 
+      ipcRenderer.invoke('metadata:update-type', fileId, type),
+    // 添加 pairImages 方法
+    pairImages: (fileId1: string, fileId2: string) => 
+      ipcRenderer.invoke('metadata:pair-images', fileId1, fileId2),
+    // 添加解绑方法
+    unpairImages: (fileId1: string, fileId2: string) => 
+      ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2)
+  },
+
+  mistake: {
+    getMistakes: () => ipcRenderer.invoke('file:get-mistakes'),
+    getTrainingHistory: () => ipcRenderer.invoke('file:get-training-history')
+  },
+
+  // 在 window.ipcRenderer 中添加配置相关的方法
+  config: {
+    getTrainingConfig: async (): Promise<{
+      success: boolean
+      data?: TrainingConfig
+      error?: string
+    }> => {
+      return await ipcRenderer.invoke('config:get-training-config')
+    },
+    
+    updateTrainingConfig: async (config: TrainingConfig): Promise<{
+      success: boolean
+      error?: string
+    }> => {
+      console.log('preload 接收到配置:', config)
+      const result = await ipcRenderer.invoke('config:update-training-config', config)
+      console.log('preload 收到结果:', result)
+      return result
+    }
+  },
+
+  upload: {
+    uploadFile: async (filePaths: string[]) => {
+      return await ipcRenderer.invoke('file:upload', filePaths)
+    },
+    uploadPastedFile: async (file: File) => {
+      // 将文件转换为 ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer()
+      // 传递 Buffer 和文件类型
+      return await ipcRenderer.invoke('file:upload-paste', {
+        buffer: arrayBuffer,
+        type: file.type
+      })
+    }
+  },
+
+  // 文件相关方法
+  file: {
+    export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
+    exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history'),
+    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId)
   }
 })
 
@@ -332,6 +394,7 @@ function useLoading() {
       safeDOM.remove(document.body, oDiv)
     },
   }
+
 }
 
 // ----------------------------------------------------------------------
@@ -350,5 +413,33 @@ const validatePath = (path: string): boolean => {
   if (!path || typeof path !== 'string') return false
   // Windows 路径或 Unix 路径
   return path.match(/^([a-zA-Z]:\\|\/)/i) !== null
+}
+
+// 确保类型定义正确
+declare global {
+  interface Window {
+    ipcRenderer: {
+      // ... 其他接口的类型定义
+      mistake: {
+        getMistakes: () => Promise<{
+          success: boolean
+          data: MistakeItem[]
+          error?: string
+        }>
+      }
+      config: {
+        getTrainingConfig: () => Promise<{
+          success: boolean
+          data?: TrainingConfig
+          error?: string
+        }>
+        updateTrainingConfig: (config: TrainingConfig) => Promise<{
+          success: boolean
+          error?: string
+        }>
+      }
+      upload: UploadAPI
+    }
+  }
 }
 

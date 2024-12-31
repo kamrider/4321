@@ -1,22 +1,59 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
+// 添加新的状态
+const dialogVisible = ref(false)
+const activeItem = ref<MistakeItem | null>(null)
+const showAnswer = ref(false)
+
+// 添加查看详情处理函数
+const handleViewDetail = (item: MistakeItem) => {
+  activeItem.value = item
+  dialogVisible.value = true
+}
+
+// 添加关闭弹窗处理函数
+const handleCloseDialog = () => {
+  dialogVisible.value = false
+  activeItem.value = null
+  showAnswer.value = false
+}
+
+// 添加切换答案显示的函数
+const toggleAnswer = () => {
+  showAnswer.value = !showAnswer.value
+  console.log('切换答案显示:', showAnswer.value)
+}
+
+// 修改获取数据的过滤逻辑
 onMounted(async () => {
   try {
-    const result = await window.ipcRenderer.uploadFile.getMistakes()
-    if (result.success) {
-      mistakeList.value = result.data
-    } else {
-      error.value = result.error || '加载错题失败'
+    const result = await window.ipcRenderer.mistake.getMistakes()
+    if (result.success && result.data) {
+      // 过滤掉没有元数据的项目
+      mistakeList.value = result.data.filter(item => {
+        // 必须有metadata
+        if (!item.metadata) return false
+        
+        // 如果是配对项，只显示错题
+        if (item.metadata.isPaired) {
+          return item.metadata.type === 'mistake'
+        }
+        
+        // 未配对项，显示所有有类型的项目
+        return item.metadata.type === 'mistake' || item.metadata.type === 'answer'
+      })
     }
-  } catch (error) {
-    console.error('加载错题失败:', error)
-    error.value = '加载错题失败'
+  } catch (err) {
+    console.error('加载失败:', err)
+    error.value = '加载失败'
   } finally {
     loading.value = false
   }
@@ -83,10 +120,98 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
     return { text: `逾期 ${Math.abs(days)} 天`, status: 'overdue' }
   }
 }
+
+// 添加导出函数
+const exportImages = async () => {
+  try {
+    loading.value = true
+    // 获取所有错题的路径
+    const imagePaths = mistakeList.value
+      .filter(item => item.metadata?.type === 'mistake')
+      .map(item => item.path)
+    
+    if (imagePaths.length === 0) {
+      ElMessage.warning('没有可导出的错题')
+      return
+    }
+
+    // 通过 preload 定义的接口调用
+    const result = await window.ipcRenderer.file.export(imagePaths)
+    if (result.success) {
+      ElMessage.success(`导出成功，文件保存在: ${result.exportPath}`)
+    } else {
+      ElMessage.error(result.error || '导出失败')
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 添加删除处理函数
+const handleDelete = async (item: MistakeItem) => {
+  try {
+    // 显示确认对话框
+    await ElMessageBox.confirm(
+      item.metadata?.isPaired 
+        ? '此操作将删除错题及其对应的答案，是否继续？'
+        : '确定要删除这个错题吗？',
+      '警告',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    loading.value = true
+
+    // 如果是配对的错题，需要同时删除答案
+    if (item.metadata?.isPaired && item.metadata?.pairId) {
+      // 找到所有配对的答案
+      const pairedAnswers = mistakeList.value.filter(
+        m => m.metadata?.pairId === item.metadata?.pairId && m.fileId !== item.fileId
+      )
+
+      // 删除所有配对的答案
+      for (const answer of pairedAnswers) {
+        await window.ipcRenderer.file.delete(answer.fileId)
+      }
+    }
+
+    // 删除错题本身
+    const result = await window.ipcRenderer.file.delete(item.fileId)
+    if (result.success) {
+      // 从列表中移除
+      mistakeList.value = mistakeList.value.filter(i => i.fileId !== item.fileId)
+      ElMessage.success('删除成功')
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    if (error === 'cancel') return
+    console.error('删除失败:', error)
+    ElMessage.error('删除失败')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="mistake-container">
+    <!-- 添加顶部操作栏 -->
+    <div class="header">
+      <h2>错题列表</h2>
+      <div class="header-actions">
+        <el-button type="primary" @click="exportImages" :loading="loading">
+          导出错题
+        </el-button>
+      </div>
+    </div>
+
     <el-empty v-if="!loading && mistakeList.length === 0" description="暂无错题" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
@@ -94,12 +219,28 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
         <div class="preview-area">
           <div v-for="item in mistakeList" 
                :key="item.fileId" 
-               class="preview-item">
+               class="preview-item"
+               :class="{
+                 'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
+                 'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
+                 'is-paired': item.metadata?.isPaired
+               }"
+               @click="item.metadata?.isPaired ? handleViewDetail(item) : null">
+            <el-button
+              class="delete-btn"
+              type="danger"
+              circle
+              size="small"
+              @click.stop="handleDelete(item)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
             <el-image 
               :src="item.preview" 
-              :preview-src-list="[item.preview]"
+              :preview-src-list="[]"
               fit="contain"
               class="preview-image"
+              @click.stop="handleViewDetail(item)"
             />
             <div class="file-info">
               <p class="file-name">{{ item.originalFileName }}</p>
@@ -127,6 +268,63 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
       </template>
     </el-skeleton>
   </div>
+
+  <!-- 添加详情弹窗 -->
+  <el-dialog
+    v-model="dialogVisible"
+    :title="activeItem?.metadata?.type === 'mistake' ? '错题详情' : '答案详情'"
+    width="80%"
+    :before-close="handleCloseDialog"
+    class="mistake-detail-dialog"
+  >
+    <div class="detail-container" v-if="activeItem">
+      <div class="mistake-section">
+        <el-image 
+          :src="activeItem.preview"
+          :preview-src-list="[activeItem.preview]"
+          fit="contain"
+          class="detail-image"
+        />
+      </div>
+      
+      <div class="answer-control" v-if="activeItem.metadata?.isPaired">
+        <el-button 
+          type="primary" 
+          @click="toggleAnswer"
+          :icon="showAnswer ? 'Hide' : 'View'"
+        >
+          {{ showAnswer ? '隐藏答案' : '查看答案' }}
+        </el-button>
+      </div>
+      
+      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
+        <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
+        <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
+          <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
+               :key="answer.fileId"
+               class="answer-item"
+          >
+            <el-image 
+              :src="answer.preview"
+              :preview-src-list="[answer.preview]"
+              fit="contain"
+              class="detail-image"
+            />
+          </div>
+        </template>
+        
+        <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
+        <template v-else>
+          <el-image 
+            :src="activeItem.metadata.pairedWith.preview"
+            :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+            fit="contain"
+            class="detail-image"
+          />
+        </template>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -255,5 +453,134 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
 .training-status.overdue {
   background-color: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
+}
+
+/* 添加新的样式，参考 PairMistake.vue 的样式 */
+.preview-item.is-mistake {
+  border-color: var(--el-color-danger);
+  background-color: var(--el-color-danger-light-7);
+}
+
+.preview-item.is-answer {
+  border-color: var(--el-color-success);
+  background-color: var(--el-color-success-light-7);
+}
+
+.preview-item.is-paired {
+  border-color: #E6A23C;
+  background-color: #fdf6ec;
+  cursor: pointer;
+}
+
+.preview-item.is-paired .preview-image {
+  cursor: pointer;
+}
+
+.preview-item:not(.is-paired) .preview-image {
+  cursor: zoom-in;
+}
+
+/* 添加详情弹窗相关样式 */
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  height: calc(95vh - 100px);
+  overflow: hidden;
+}
+
+.detail-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.mistake-section,
+.answer-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #f5f7fa;
+}
+
+.answer-control {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  z-index: 2001; /* 确保在弹窗之上 */
+}
+
+.answer-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.answer-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.answer-item .detail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #f5f7fa;
+}
+
+.answer-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-size: 16px;
+  color: #606266;
+  z-index: 1;
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 20px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #303133;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.preview-item:hover .delete-btn {
+  opacity: 1;
 }
 </style> 

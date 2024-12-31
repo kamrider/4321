@@ -5,20 +5,14 @@ import Settings from '../components/Settings.vue'
 import Mistake from '../components/Mistake.vue'
 import NotFound from '../components/NotFound.vue'
 import History from '../components/History.vue'
+import Members from '../components/Members.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/upload',
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/login',
-      name: 'login',
-      component: Login,
-      meta: { requiresAuth: false }
+      redirect: '/members'
     },
     {
       path: '/upload',
@@ -39,8 +33,17 @@ const router = createRouter({
       component: History
     },
     {
+      path: '/members',
+      component: Members
+    },
+    {
       path: '/:pathMatch(.*)*',
       component: NotFound
+    },
+    {
+      path: '/pair-mistake',
+      name: 'PairMistake',
+      component: () => import('../components/PairMistake.vue')
     }
   ]
 })

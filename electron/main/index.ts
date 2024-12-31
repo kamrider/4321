@@ -1175,22 +1175,40 @@ ipcMain.handle('file:delete', async (event, fileId: string) => {
       throw new Error('文件不存在')
     }
 
-    // 1. 先删除实际文件
-    // 文件路径应该是 memberDir/files/relativePath，而不是 memberDir/files/files/relativePath
-    const filePath = path.join(
-      metadataManager.getCurrentMemberDir(),
-      fileMetadata.relativePath
-    )
-    
-    try {
-      await fs.promises.unlink(filePath)
-    } catch (error) {
-      console.error('删除文件失败:', error)
-      throw new Error(`删除文件失败: ${error.message}`)
+    // 如果是配对的文件，找出所有相关的文件
+    const filesToDelete = [fileId]
+    if (fileMetadata.isPaired && fileMetadata.pairId) {
+      // 查找所有具有相同 pairId 的文件
+      for (const [id, file] of Object.entries(metadata.files)) {
+        if (id !== fileId && file.pairId === fileMetadata.pairId) {
+          filesToDelete.push(id)
+        }
+      }
     }
-    
-    // 2. 删除成功后，再删除元数据
-    delete metadata.files[fileId]
+
+    // 删除所有相关文件
+    for (const id of filesToDelete) {
+      const file = metadata.files[id]
+      if (!file) continue
+
+      // 1. 删除实际文件
+      const filePath = path.join(
+        metadataManager.getCurrentMemberDir(),
+        file.relativePath
+      )
+      
+      try {
+        await fs.promises.unlink(filePath)
+      } catch (error) {
+        console.error(`删除文件失败 (${id}):`, error)
+        throw new Error(`删除文件失败 (${id}): ${error.message}`)
+      }
+      
+      // 2. 删除元数据
+      delete metadata.files[id]
+    }
+
+    // 保存更新后的元数据
     await metadataManager.saveMetadata()
 
     return {

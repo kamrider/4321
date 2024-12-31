@@ -249,8 +249,8 @@ const submitTraining = async (fileId: string, success: boolean) => {
         }
       }
       ElMessage.success('训练记录已保存')
-      // 关闭对话框
-      dialogVisible.value = false
+      // 移除关闭对话框的代码
+      // dialogVisible.value = false
     } else {
       throw new Error(result.error)
     }

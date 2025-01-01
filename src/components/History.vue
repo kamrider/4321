@@ -584,30 +584,60 @@ const submitTraining = async (fileId: string, success: boolean) => {
 }
 
 /* 添加详情弹窗相关样式 */
+.mistake-detail-dialog {
+  display: flex;
+  justify-content: center;
+}
+
 .mistake-detail-dialog :deep(.el-dialog__body) {
   padding: 0;
-  height: calc(95vh - 100px);
+  height: 90vh;
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .detail-container {
   height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   position: relative;
+  padding: 20px;
 }
 
 .mistake-section,
 .answer-section {
-  flex: 1;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .detail-image {
+  height: calc(90vh - 80px);
+  width: auto;
+  object-fit: scale-down;
+  background-color: #f5f7fa;
+}
+
+.answer-item {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.answer-item .detail-image {
+  height: calc(90vh - 80px);
+  width: auto;
+  object-fit: scale-down;
   background-color: #f5f7fa;
 }
 
@@ -619,30 +649,7 @@ const submitTraining = async (fileId: string, success: boolean) => {
   padding: 16px;
   display: flex;
   justify-content: center;
-  z-index: 2001; /* 确保在弹窗之上 */
-}
-
-.answer-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.answer-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.answer-item .detail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background-color: #f5f7fa;
-}
-
-.mistake-detail-dialog :deep(.el-dialog) {
-  position: relative;
+  z-index: 2001;
 }
 
 .timer-container {

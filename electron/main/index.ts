@@ -36,18 +36,18 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 // Disable GPU Acceleration for Windows 7
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 
-// 根据环境设置不同的应用 ID
+// 根据环境设置不同的应用名和路径
 const isDevelopment = process.env.NODE_ENV === 'development'
-const appId = isDevelopment ? 'com.yourapp.id.dev' : 'com.yourapp.id.prod'
+const APP_NAME = isDevelopment ? 'mistake-trainer-dev' : 'mistake-trainer'
 
 // 设置应用 ID
 if (process.platform === 'win32') {
-  app.setAppUserModelId(appId)
+  app.setAppUserModelId(APP_NAME)
 }
 
 // 使用不同的单实例锁
 if (!app.requestSingleInstanceLock({
-  appId: appId
+  appId: APP_NAME
 })) {
   app.quit()
   process.exit(0)
@@ -59,14 +59,24 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 // 初始化 store，根据环境使用不同的配置
 const store = new Store({
-  name: process.env.NODE_ENV === 'development' ? 'config-dev' : 'config'
+  name: isDevelopment ? 'config-dev' : 'config',
+  cwd: path.join(app.getPath('userData'), APP_NAME)
 })
 
-// 获取默认存储路径，开发环境使用不同目录
+// 获取默认存储路径，完全分离开发和生产环境
 const DEFAULT_STORAGE_PATH = path.join(
-  app.getPath('userData'), 
-  process.env.NODE_ENV === 'development' ? 'uploads-dev' : 'uploads'
+  app.getPath('userData'),
+  APP_NAME,
+  'storage'
 )
+
+// 配置文件路径也区分环境
+const configPath = path.join(
+  process.env.APP_ROOT || '',
+  'config',
+  isDevelopment ? 'training-config-dev.json' : 'training-config.json'
+)
+
 let isCancelled = false
 
 // 获取存储路径，如果不存在则使用默认路径
@@ -120,10 +130,9 @@ const validateFilePaths = (filePaths: string[]) => {
 }
 
 // 添加元数据管理器
-const metadataManager = new MetadataManager(targetDirectory)
+let metadataManager = new MetadataManager(targetDirectory)
 
 // 初始化训练管理器
-const configPath = path.join(process.env.APP_ROOT || '', 'config/training-config.json')
 const trainingManager = new TrainingManager(configPath)
 
 // 修改上传单个文件的函数
@@ -518,21 +527,14 @@ ipcMain.handle('file:set-storage-path', async (event) => {
       // 验证路径是否可写
       await fs.promises.access(newPath, fs.constants.W_OK)
       
-      // 开始迁移
-      const migrationResult = await metadataManager.migrateStorage(newPath)
-      
-      if (!migrationResult.success) {
-        event.sender.send('file:error', {
-          type: 'migration',
-          errors: migrationResult.errors
-        })
-        throw new Error('迁移失败：' + migrationResult.errors.join('\n'))
-      }
-      
+      // 直接切换到新路径
       targetDirectory = newPath
       store.set('storagePath', targetDirectory)
-      return { success: true, path: targetDirectory }
       
+      // 重新初始化 MetadataManager
+      metadataManager = new MetadataManager(targetDirectory)
+      
+      return { success: true, path: targetDirectory }
     } catch (error) {
       throw new Error(`设置存储路径失败: ${error.message}`)
     }

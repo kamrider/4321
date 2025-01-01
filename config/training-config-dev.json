@@ -1,0 +1,14 @@
+{
+  "proficiencyIntervals": [
+    { "range": [0, 9], "interval": 1, "description": "初学者" },
+    { "range": [10, 19], "interval": 2, "description": "入门" },
+    { "range": [20, 29], "interval": 4, "description": "基础" },
+    { "range": [30, 39], "interval": 7, "description": "进步" },
+    { "range": [40, 49], "interval": 10, "description": "进阶" },
+    { "range": [50, 59], "interval": 14, "description": "熟练" },
+    { "range": [60, 69], "interval": 18, "description": "精通" },
+    { "range": [70, 79], "interval": 21, "description": "专家" },
+    { "range": [80, 89], "interval": 25, "description": "大师" },
+    { "range": [90, 100], "interval": 30, "description": "宗师" }
+  ]
+} 

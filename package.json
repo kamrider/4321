@@ -50,6 +50,7 @@
   "build": {
     "appId": "com.yourapp.id.prod",
     "productName": "错题训练",
+    "asar": true,
     "directories": {
       "output": "release_builds"
     },
@@ -73,7 +74,8 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "package.json"
     ],
     "extraResources": [
       {

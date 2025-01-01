@@ -9,8 +9,6 @@ declare module 'vue' {
   export interface GlobalComponents {
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
-    ElCollapse: typeof import('element-plus/es')['ElCollapse']
-    ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElDialog: typeof import('element-plus/es')['ElDialog']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElForm: typeof import('element-plus/es')['ElForm']
@@ -37,7 +35,6 @@ declare module 'vue' {
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
     Training: typeof import('./src/components/Training.vue')['default']
     TrainingConfigPanel: typeof import('./src/components/TrainingConfigPanel.vue')['default']
-    TrainingSimulator: typeof import('./src/components/TrainingSimulator.vue')['default']
     UploadMistake: typeof import('./src/components/UploadMistake.vue')['default']
   }
   export interface ComponentCustomProperties {

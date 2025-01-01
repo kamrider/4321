@@ -1,69 +1,52 @@
 {
-  "baseAdjustment": {
-    "success": 5,
-    "fail": -10
-  },
-  "intervalMultiplier": {
-    "success": 1.3,
-    "fail": 0.7
-  },
-  "timeRules": [
+  "proficiencyIntervals": [
     {
       "range": [
-        -1,
-        0
+        0,
+        10
       ],
-      "bonus": 2,
-      "description": "准时或提前1天"
+      "interval": 1,
+      "description": "初学者"
     },
     {
       "range": [
-        -3,
-        -2
+        10,
+        19
       ],
-      "bonus": 0,
-      "description": "提前2-3天"
+      "interval": 3,
+      "description": "基础"
     },
     {
       "range": [
-        -7,
-        -4
+        20,
+        39
       ],
-      "bonus": -1,
-      "description": "提前4-7天"
+      "interval": 7,
+      "description": "进阶"
     },
     {
       "range": [
-        1,
-        2
+        40,
+        69
       ],
-      "bonus": -1,
-      "description": "延迟1-2天"
+      "interval": 14,
+      "description": "熟练"
     },
     {
       "range": [
-        3,
-        7
+        70,
+        89
       ],
-      "bonus": -2,
-      "description": "延迟3-7天"
+      "interval": 21,
+      "description": "精通"
     },
     {
       "range": [
-        8,
-        999999
+        90,
+        100
       ],
-      "bonus": -3,
-      "description": "延迟超过一周"
+      "interval": 30,
+      "description": "专家"
     }
-  ],
-  "proficiencyThresholds": {
-    "low": 30,
-    "medium": 70,
-    "high": 90
-  },
-  "intervals": {
-    "min": 1,
-    "max": 30
-  }
+  ]
 }

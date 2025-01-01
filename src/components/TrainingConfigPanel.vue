@@ -2,34 +2,16 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { TrainingConfig } from '../../electron/preload'
-import TrainingSimulator from './TrainingSimulator.vue'
 
 const config = ref<TrainingConfig>({
-  baseAdjustment: {
-    success: 5,
-    fail: -10
-  },
-  intervalMultiplier: {
-    success: 1.2,
-    fail: 0.8
-  },
-  timeRules: [
-    { range: [-1, 0], bonus: 2, description: '准时或提前1天' },
-    { range: [-3, -2], bonus: 0, description: '提前2-3天' },
-    { range: [-7, -4], bonus: -1, description: '提前4-7天' },
-    { range: [1, 2], bonus: -1, description: '延迟1-2天' },
-    { range: [3, 7], bonus: -2, description: '延迟3-7天' },
-    { range: [8, Infinity], bonus: -3, description: '延迟超过一周' }
-  ],
-  proficiencyThresholds: {
-    low: 30,
-    medium: 70,
-    high: 90
-  },
-  intervals: {
-    min: 1,
-    max: 21
-  }
+  proficiencyIntervals: [
+    { range: [0, 9], interval: 1, description: '初学者' },
+    { range: [10, 19], interval: 3, description: '基础' },
+    { range: [20, 39], interval: 7, description: '进阶' },
+    { range: [40, 69], interval: 14, description: '熟练' },
+    { range: [70, 89], interval: 21, description: '精通' },
+    { range: [90, 100], interval: 30, description: '专家' }
+  ]
 })
 
 const loading = ref(true)
@@ -49,14 +31,8 @@ onMounted(async () => {
 
 const saveConfig = async () => {
   try {
-    const configToSave = JSON.parse(JSON.stringify(config.value, (key, value) => {
-      if (value === Infinity) {
-        return 999999
-      }
-      return value
-    }))
-    
-    console.log('准备保��配置:', configToSave)
+    const configToSave = JSON.parse(JSON.stringify(config.value))
+    console.log('准备保存配置:', configToSave)
     const result = await window.ipcRenderer.config.updateTrainingConfig(configToSave)
     console.log('保存配置结果:', result)
     if (result.success) {
@@ -68,6 +44,18 @@ const saveConfig = async () => {
     console.error('保存失败:', error)
     ElMessage.error('保存失败')
   }
+}
+
+const addInterval = () => {
+  config.value.proficiencyIntervals.push({
+    range: [0, 0],
+    interval: 1,
+    description: ''
+  })
+}
+
+const removeInterval = (index: number) => {
+  config.value.proficiencyIntervals.splice(index, 1)
 }
 </script>
 
@@ -81,63 +69,36 @@ const saveConfig = async () => {
     </template>
 
     <el-form label-position="top">
-      <el-collapse>
-        <el-collapse-item title="基础调整" name="1">
-          <el-form-item label="成功时的基础分数调整">
-            <el-input-number v-model="config.baseAdjustment.success" :step="1" />
+      <div class="intervals-header">
+        <h3>熟练度区间配置</h3>
+        <el-button type="primary" size="small" @click="addInterval">添加区间</el-button>
+      </div>
+      
+      <div v-for="(interval, index) in config.proficiencyIntervals" :key="index" class="interval-item">
+        <div class="interval-header">
+          <span>区间 {{ index + 1 }}</span>
+          <el-button type="danger" size="small" @click="removeInterval(index)">删除</el-button>
+        </div>
+        
+        <div class="interval-content">
+          <el-form-item label="熟练度范围">
+            <div class="range-inputs">
+              <el-input-number v-model="interval.range[0]" :min="0" :max="100" placeholder="最小值" />
+              <span>至</span>
+              <el-input-number v-model="interval.range[1]" :min="0" :max="100" placeholder="最大值" />
+            </div>
           </el-form-item>
-          <el-form-item label="失败时的基础分数调整">
-            <el-input-number v-model="config.baseAdjustment.fail" :step="1" />
+          
+          <el-form-item label="训练间隔（天）">
+            <el-input-number v-model="interval.interval" :min="1" :max="365" />
           </el-form-item>
-        </el-collapse-item>
-
-        <el-collapse-item title="间隔倍数" name="2">
-          <el-form-item label="成功时的间隔倍数">
-            <el-input-number v-model="config.intervalMultiplier.success" :step="0.1" :precision="2" />
+          
+          <el-form-item label="描述">
+            <el-input v-model="interval.description" placeholder="请输入区间描述" />
           </el-form-item>
-          <el-form-item label="失败时的间隔倍数">
-            <el-input-number v-model="config.intervalMultiplier.fail" :step="0.1" :precision="2" />
-          </el-form-item>
-        </el-collapse-item>
-
-        <el-collapse-item title="时间规则" name="3">
-          <div v-for="(rule, index) in config.timeRules" :key="index" class="rule-item">
-            <el-form-item :label="`规则 ${index + 1}`">
-              <div class="rule-content">
-                <el-input-number v-model="rule.range[0]" placeholder="开始天数" />
-                <span>至</span>
-                <el-input-number v-model="rule.range[1]" placeholder="结束天数" />
-                <el-input-number v-model="rule.bonus" placeholder="分数调整" />
-                <el-input v-model="rule.description" placeholder="规则描述" />
-              </div>
-            </el-form-item>
-          </div>
-        </el-collapse-item>
-
-        <el-collapse-item title="熟练度阈值" name="4">
-          <el-form-item label="低熟练度阈值">
-            <el-input-number v-model="config.proficiencyThresholds.low" :min="0" :max="100" />
-          </el-form-item>
-          <el-form-item label="中等熟练度阈值">
-            <el-input-number v-model="config.proficiencyThresholds.medium" :min="0" :max="100" />
-          </el-form-item>
-          <el-form-item label="高熟练度阈值">
-            <el-input-number v-model="config.proficiencyThresholds.high" :min="0" :max="100" />
-          </el-form-item>
-        </el-collapse-item>
-
-        <el-collapse-item title="训练间隔范围" name="5">
-          <el-form-item label="最小间隔天数">
-            <el-input-number v-model="config.intervals.min" :min="1" />
-          </el-form-item>
-          <el-form-item label="最大间隔天数">
-            <el-input-number v-model="config.intervals.max" :min="1" />
-          </el-form-item>
-        </el-collapse-item>
-      </el-collapse>
+        </div>
+      </div>
     </el-form>
-
-    <TrainingSimulator v-if="!loading" :config="config" />
   </el-card>
 </template>
 
@@ -152,21 +113,39 @@ const saveConfig = async () => {
   align-items: center;
 }
 
-.rule-item {
+.intervals-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.intervals-header h3 {
+  margin: 0;
+}
+
+.interval-item {
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 10px;
+  padding: 15px;
+  margin-bottom: 15px;
 }
 
-.rule-content {
-  display: grid;
-  grid-template-columns: 100px auto 100px auto 1fr;
-  gap: 10px;
+.interval-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  margin-bottom: 15px;
 }
 
-:deep(.el-collapse) + .simulation-wrapper {
-  margin-top: 20px;
+.interval-content {
+  display: grid;
+  gap: 15px;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 </style>

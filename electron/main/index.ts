@@ -7,6 +7,7 @@ import * as fs from 'fs'
 import Store from 'electron-store'
 import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
+import type { TrainingConfig } from './training-manager'
 import { v4 as uuidv4 } from 'uuid'
 
 const require = createRequire(import.meta.url)
@@ -122,7 +123,7 @@ const validateFilePaths = (filePaths: string[]) => {
 const metadataManager = new MetadataManager(targetDirectory)
 
 // 初始化训练管理器
-const configPath = 'config/training-config.json'
+const configPath = path.join(process.env.APP_ROOT || '', 'config/training-config.json')
 const trainingManager = new TrainingManager(configPath)
 
 // 修改上传单个文件的函数

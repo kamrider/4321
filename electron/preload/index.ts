@@ -86,28 +86,11 @@ interface TrainingNextInfo {
 
 // 在现有的接口定义中添加配置相关的类型
 interface TrainingConfig {
-  baseAdjustment: {
-    success: number
-    fail: number
-  }
-  intervalMultiplier: {
-    success: number
-    fail: number
-  }
-  timeRules: Array<{
+  proficiencyIntervals: Array<{
     range: [number, number]
-    bonus: number
+    interval: number
     description: string
   }>
-  proficiencyThresholds: {
-    low: number
-    medium: number
-    high: number
-  }
-  intervals: {
-    min: number
-    max: number
-  }
 }
 
 // 添加类型定义

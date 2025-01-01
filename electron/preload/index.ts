@@ -1,5 +1,11 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+// 添加 Result 类型定义
+interface Result<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+}
 
 // 添加在文件开头的类型定义
 interface UploadError extends Error {
@@ -85,7 +91,7 @@ interface TrainingNextInfo {
 }
 
 // 在现有的接口定义中添加配置相关的类型
-interface TrainingConfig {
+export interface TrainingConfig {
   proficiencyIntervals: Array<{
     range: [number, number]
     interval: number

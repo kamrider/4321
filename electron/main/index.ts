@@ -39,15 +39,16 @@ if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 // 根据环境设置不同的应用名和路径
 const isDevelopment = process.env.NODE_ENV === 'development'
 const APP_NAME = isDevelopment ? 'mistake-trainer-dev' : 'mistake-trainer'
+const APP_ID = isDevelopment ? 'com.mistake-trainer.dev' : 'com.mistake-trainer.prod'
 
 // 设置应用 ID
 if (process.platform === 'win32') {
-  app.setAppUserModelId(APP_NAME)
+  app.setAppUserModelId(APP_ID)
 }
 
 // 使用不同的单实例锁
 if (!app.requestSingleInstanceLock({
-  appId: APP_NAME
+  appId: APP_ID
 })) {
   app.quit()
   process.exit(0)

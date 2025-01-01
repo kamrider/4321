@@ -48,7 +48,7 @@
     "vue-router": "^4.5.0"
   },
   "build": {
-    "appId": "com.yourapp.id.prod",
+    "appId": "com.mistake-trainer.prod",
     "productName": "错题训练",
     "asar": true,
     "directories": {
@@ -63,7 +63,8 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,

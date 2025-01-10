@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { Timer } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { Timer, Bell } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
@@ -16,6 +16,39 @@ const showAnswer = ref(false)
 // 添加计时器相关的响应式变量
 const time = ref(0)
 const timerInterval = ref<number | null>(null)
+
+// 添加提醒相关的响应式变量
+const hasReachedOneMinute = ref(false)
+const audioContext = ref<AudioContext | null>(null)
+
+// 添加音符频率常量
+const NOTES = {
+  DO: 523.25,  // C5
+  RE: 587.33,  // D5
+  MI: 659.25,  // E5
+  FA: 698.46,  // F5
+  SOL: 783.99, // G5
+  LA: 880.00,  // A5
+  SI: 987.77,  // B5
+  DO_HIGH: 1046.50 // C6
+}
+
+// 添加时间颜色配置
+const TIME_COLORS = {
+  1: { color: '#67C23A', background: 'rgba(103, 194, 58, 0.1)' },   // 绿色 (0-1分钟)
+  2: { color: '#409EFF', background: 'rgba(64, 158, 255, 0.1)' },   // 蓝色 (1-2分钟)
+  3: { color: '#E6A23C', background: 'rgba(230, 162, 60, 0.1)' },   // 橙色 (2-3分钟)
+  4: { color: '#F56C6C', background: 'rgba(245, 108, 108, 0.1)' },  // 红色 (3-4分钟)
+  5: { color: '#9B59B6', background: 'rgba(155, 89, 182, 0.1)' },   // 紫色 (4-5分钟)
+  max: { color: '#303133', background: 'rgba(48, 49, 51, 0.1)' }    // 深灰色 (5分钟以上)
+}
+
+// 添加计算当前颜色的函数
+const currentTimeColor = computed(() => {
+  const minutes = Math.floor((time.value * 10) / 60000) + 1 // 将毫秒转换为分钟
+  const colorKey = minutes <= 5 ? minutes : 'max'
+  return TIME_COLORS[colorKey]
+})
 
 // 格式化时间显示，包含毫秒
 const formattedTime = computed(() => {
@@ -162,6 +195,7 @@ const handleCloseDialog = () => {
   dialogVisible.value = false
   activeItem.value = null
   showAnswer.value = false
+  hasReachedOneMinute.value = false // 重置提醒状态
 }
 
 // 添加切换答案显示的函数
@@ -259,6 +293,106 @@ const submitTraining = async (fileId: string, success: boolean) => {
     ElMessage.error('提交训练结果失败')
   }
 }
+
+// 添加音乐组合配置
+const MELODIES = {
+  1: [ // 第1分钟：Do Re Mi
+    { freq: NOTES.DO, duration: 0.2 },
+    { freq: NOTES.RE, duration: 0.2 },
+    { freq: NOTES.MI, duration: 0.3 }
+  ],
+  2: [ // 第2分钟：Mi Fa So
+    { freq: NOTES.MI, duration: 0.2 },
+    { freq: NOTES.FA, duration: 0.2 },
+    { freq: NOTES.SOL, duration: 0.3 }
+  ],
+  3: [ // 第3分钟：So La Si
+    { freq: NOTES.SOL, duration: 0.2 },
+    { freq: NOTES.LA, duration: 0.2 },
+    { freq: NOTES.SI, duration: 0.3 }
+  ],
+  4: [ // 第4分钟：La Si Do高
+    { freq: NOTES.LA, duration: 0.2 },
+    { freq: NOTES.SI, duration: 0.2 },
+    { freq: NOTES.DO_HIGH, duration: 0.3 }
+  ],
+  5: [ // 第5分钟：完整音阶 Do Re Mi Fa So
+    { freq: NOTES.DO, duration: 0.15 },
+    { freq: NOTES.RE, duration: 0.15 },
+    { freq: NOTES.MI, duration: 0.15 },
+    { freq: NOTES.FA, duration: 0.15 },
+    { freq: NOTES.SOL, duration: 0.3 }
+  ],
+  max: [ // 5分钟以上：完整音阶 Fa So La Si Do高
+    { freq: NOTES.FA, duration: 0.15 },
+    { freq: NOTES.SOL, duration: 0.15 },
+    { freq: NOTES.LA, duration: 0.15 },
+    { freq: NOTES.SI, duration: 0.15 },
+    { freq: NOTES.DO_HIGH, duration: 0.3 }
+  ]
+}
+
+// 修改音效播放函数
+const playMelody = async () => {
+  try {
+    if (!audioContext.value) {
+      audioContext.value = new AudioContext()
+    }
+
+    const ctx = audioContext.value
+    const now = ctx.currentTime
+    
+    // 创建音量控制
+    const masterGain = ctx.createGain()
+    masterGain.gain.value = 0.3 // 设置整体音量
+    masterGain.connect(ctx.destination)
+
+    // 根据当前分钟数选择音乐
+    const minutes = Math.floor((time.value * 10) / 60000) + 1
+    const melodyKey = minutes <= 5 ? minutes : 'max'
+    const notes = MELODIES[melodyKey]
+
+    notes.forEach((note, index) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      
+      // 使用正弦波
+      osc.type = 'sine'
+      osc.frequency.value = note.freq
+      
+      // 设置音量包络
+      gain.gain.setValueAtTime(0, now + index * note.duration)
+      gain.gain.linearRampToValueAtTime(0.3, now + index * note.duration + 0.05)
+      gain.gain.linearRampToValueAtTime(0, now + (index + 1) * note.duration)
+      
+      // 连接节点
+      osc.connect(gain)
+      gain.connect(masterGain)
+      
+      // 开始和结束
+      osc.start(now + index * note.duration)
+      osc.stop(now + (index + 1) * note.duration)
+    })
+  } catch (error) {
+    console.error('播放提示音失败:', error)
+  }
+}
+
+// 修改时间监听函数
+watch(time, (newValue) => {
+  // 每分钟（6000 * 10ms = 1分钟）触发一次
+  if (newValue > 0 && newValue % 6000 === 0) {
+    playMelody()
+    // 计算当前分钟数
+    const minutes = Math.floor(newValue / 6000)
+    const timeColor = TIME_COLORS[Math.min(minutes, 'max')]
+    ElMessage({
+      message: `已经练习 ${minutes} 分钟了，继续加油！`,
+      type: minutes <= 2 ? 'success' : minutes <= 4 ? 'warning' : 'error',
+      duration: 3000
+    })
+  }
+})
 </script>
 
 <template>
@@ -342,48 +476,57 @@ const submitTraining = async (fileId: string, success: boolean) => {
     :before-close="handleCloseDialog"
     class="mistake-detail-dialog"
   >
-    <!-- 秒表显示 -->
-    <div class="timer-container">
-      <div class="timer-display">
-        <el-icon class="timer-icon"><Timer /></el-icon>
-        <span class="timer-text">{{ formattedTime }}</span>
-      </div>
-    </div>
-
-    <!-- 左侧"记住了"按钮 -->
-    <div class="side-button left-button">
-      <el-button 
-        type="success" 
-        size="large"
-        round
-        :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
-        @click="activeItem && submitTraining(activeItem.fileId, true)"
-      >
-        记住了
-      </el-button>
-    </div>
-
-    <!-- 右侧"没记住"按钮 -->
-    <div class="side-button right-button">
-      <el-button 
-        type="danger" 
-        size="large"
-        round
-        :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
-        @click="activeItem && submitTraining(activeItem.fileId, false)"
-      >
-        没记住
-      </el-button>
-    </div>
-
     <div class="detail-container" v-if="activeItem">
+      <!-- 计时器 -->
+      <div class="timer-container">
+        <div class="timer-display" 
+             :style="{ 
+               color: currentTimeColor.color,
+               backgroundColor: currentTimeColor.background,
+               borderColor: currentTimeColor.color
+             }"
+        >
+          <el-icon class="timer-icon" :style="{ color: currentTimeColor.color }"><Timer /></el-icon>
+          <span class="timer-text">{{ formattedTime }}</span>
+          <el-icon v-if="time > 0" class="bell-icon" :style="{ color: currentTimeColor.color }">
+            <Bell />
+          </el-icon>
+        </div>
+      </div>
+
+      <!-- 主要内容区域 -->
       <div class="mistake-section">
+        <!-- 左侧按钮 -->
+        <el-button 
+          class="side-button left-button"
+          type="success" 
+          size="large"
+          round
+          :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
+          @click="activeItem && submitTraining(activeItem.fileId, true)"
+        >
+          记住了
+        </el-button>
+
+        <!-- 图片 -->
         <el-image 
           :src="activeItem.preview"
           :preview-src-list="[activeItem.preview]"
           fit="contain"
           class="detail-image"
         />
+
+        <!-- 右侧按钮 -->
+        <el-button 
+          class="side-button right-button"
+          type="danger" 
+          size="large"
+          round
+          :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
+          @click="activeItem && submitTraining(activeItem.fileId, false)"
+        >
+          没记住
+        </el-button>
       </div>
       
       <div class="answer-control" v-if="activeItem.metadata?.isPaired">
@@ -397,7 +540,6 @@ const submitTraining = async (fileId: string, success: boolean) => {
       </div>
       
       <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
-        <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
         <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
           <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
                :key="answer.fileId"
@@ -412,7 +554,6 @@ const submitTraining = async (fileId: string, success: boolean) => {
           </div>
         </template>
         
-        <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
         <template v-else>
           <el-image 
             :src="activeItem.metadata.pairedWith.preview"
@@ -583,7 +724,7 @@ const submitTraining = async (fileId: string, success: boolean) => {
   background-color: #fdf6ec;
 }
 
-/* 添加详情弹窗相关样式 */
+/* 修改弹窗相关样式 */
 .mistake-detail-dialog {
   display: flex;
   justify-content: center;
@@ -604,113 +745,141 @@ const submitTraining = async (fileId: string, success: boolean) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   position: relative;
-  padding: 20px;
-}
-
-.mistake-section,
-.answer-section {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.detail-image {
-  height: calc(90vh - 80px);
-  width: auto;
-  object-fit: scale-down;
-  background-color: #f5f7fa;
-}
-
-.answer-item {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.answer-item .detail-image {
-  height: calc(90vh - 80px);
-  width: auto;
-  object-fit: scale-down;
-  background-color: #f5f7fa;
-}
-
-.answer-control {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 16px;
-  display: flex;
-  justify-content: center;
-  z-index: 2001;
 }
 
 .timer-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  padding: 10px;
+  width: 100%;
+  padding: 8px;
   background-color: #f5f7fa;
   border-bottom: 1px solid #e4e7ed;
-  z-index: 2001;
+  display: flex;
+  justify-content: center;
 }
 
 .timer-display {
   display: flex;
   align-items: center;
   font-size: 28px;
-  color: #409EFF;
+  transition: all 0.5s ease;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  min-width: 200px;
+  justify-content: center;
+  background-color: white;
 }
 
 .timer-icon {
-  margin-right: 10px;
-  font-size: 28px;
+  margin-right: 8px;
+  font-size: 24px;
+  transition: color 0.5s ease;
+}
+
+.bell-icon {
+  margin-left: 8px;
+  font-size: 24px;
+  transition: color 0.5s ease;
+  animation: shake 1.5s infinite;
 }
 
 .timer-text {
   font-family: monospace;
   font-weight: bold;
+  min-width: 120px;
+  text-align: center;
+}
+
+/* 优化动画效果 */
+@keyframes shake {
+  0%, 100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(8deg);
+  }
+  75% {
+    transform: rotate(-8deg);
+  }
+}
+
+/* 添加颜色过渡动画 */
+@keyframes colorPulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.timer-display {
+  animation: colorPulse 2s infinite;
+}
+
+.mistake-section {
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 20px 60px;
+}
+
+.detail-image {
+  height: calc(90vh - 80px);
+  width: auto;
+  object-fit: contain;
+  background-color: #f5f7fa;
 }
 
 .side-button {
-  position: fixed;
+  position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 2001;
+  z-index: 1;
 }
 
 .left-button {
-  left: 40px;
+  left: 10px;
 }
 
 .right-button {
-  right: 40px;
+  right: 10px;
 }
 
-/* 让按钮更明显 */
-.side-button :deep(.el-button) {
-  padding: 20px 30px;
-  font-size: 18px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+.answer-control {
+  padding: 16px;
+  display: flex;
+  justify-content: center;
 }
 
-.side-button :deep(.el-button:hover) {
-  transform: scale(1.05);
-  transition: transform 0.2s;
+.answer-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-/* 调整对话框内容，防止被按钮遮挡 */
-.detail-container {
-  margin: 60px 100px 0; /* 上方留出空间给计时器 */
+.answer-item {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.answer-item .detail-image {
+  height: calc(90vh - 80px);
+  width: auto;
+  object-fit: contain;
+  background-color: #f5f7fa;
 }
 </style> 

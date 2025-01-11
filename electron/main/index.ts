@@ -1256,3 +1256,78 @@ ipcMain.handle('file:delete', async (event, fileId: string) => {
     }
   }
 })
+
+// 修改导出错题和答案的处理函数
+ipcMain.handle('file:export-mistakes-and-answers', async (event, items: Array<{
+  path: string
+  type?: string
+  pairId?: string
+}>) => {
+  try {
+    // 让用户选择导出目录
+    const result = await dialog.showOpenDialog({
+      title: '选择导出目录',
+      properties: ['openDirectory']
+    })
+
+    if (result.canceled) return { success: false, error: '未选择导出目录' }
+    
+    const exportPath = result.filePaths[0]
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const exportDir = path.join(exportPath, `错题导出_${timestamp}`)
+    
+    // 创建子目录
+    const mistakesDir = path.join(exportDir, '错题')
+    const answersDir = path.join(exportDir, '答案')
+    await fs.promises.mkdir(mistakesDir, { recursive: true })
+    await fs.promises.mkdir(answersDir, { recursive: true })
+
+    // 按 pairId 分组
+    const groupedItems = new Map<string, { mistake?: typeof items[0], answers: typeof items[0][] }>()
+    
+    items.forEach(item => {
+      if (!item.pairId) return
+
+      if (!groupedItems.has(item.pairId)) {
+        groupedItems.set(item.pairId, { answers: [] })
+      }
+      
+      const group = groupedItems.get(item.pairId)!
+      if (item.type === 'mistake') {
+        group.mistake = item
+      } else if (item.type === 'answer') {
+        group.answers.push(item)
+      }
+    })
+
+    // 导出文件
+    let index = 1
+    for (const group of groupedItems.values()) {
+      if (!group.mistake) continue
+
+      // 导出错题
+      const mistakeExt = path.extname(group.mistake.path)
+      const mistakePath = path.join(mistakesDir, `${index}${mistakeExt}`)
+      await fs.promises.copyFile(group.mistake.path, mistakePath)
+
+      // 导出对应的答案
+      group.answers.forEach((answer, answerIndex) => {
+        const answerExt = path.extname(answer.path)
+        const answerPath = path.join(answersDir, `${index}_${answerIndex + 1}${answerExt}`)
+        await fs.promises.copyFile(answer.path, answerPath)
+      })
+
+      index++
+    }
+
+    return {
+      success: true,
+      exportDir,
+      totalMistakes: index - 1,
+      totalAnswers: Array.from(groupedItems.values()).reduce((sum, group) => sum + group.answers.length, 0)
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    return { success: false, error: '导出失败' }
+  }
+})

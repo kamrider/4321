@@ -17,11 +17,21 @@ const showAnswer = ref(false)
 const sortType = ref<'time' | 'proficiency'>('time')
 const sortOrder = ref<'asc' | 'desc'>('desc')
 
-// 添加排序后的列表计算属性
-const sortedMistakeList = computed(() => {
+// 修改计算属性，只用于显示
+const displayList = computed(() => {
   if (!mistakeList.value) return []
   
-  return [...mistakeList.value].sort((a, b) => {
+  // 只显示错题
+  return mistakeList.value.filter(item => 
+    item.metadata?.type === 'mistake'
+  )
+})
+
+// 添加排序后的列表计算属性
+const sortedMistakeList = computed(() => {
+  if (!displayList.value) return []
+  
+  return [...displayList.value].sort((a, b) => {
     if (sortType.value === 'time') {
       const timeA = new Date(a.uploadDate).getTime()
       const timeB = new Date(b.uploadDate).getTime()
@@ -48,6 +58,9 @@ const handleSort = (type: 'time' | 'proficiency') => {
 
 // 添加查看详情处理函数
 const handleViewDetail = (item: MistakeItem) => {
+  console.log('查看详情:', item)
+  console.log('是否有 pairId:', item.metadata?.pairId)
+  console.log('是否已配对:', item.metadata?.isPaired)
   activeItem.value = item
   dialogVisible.value = true
 }
@@ -63,6 +76,11 @@ const handleCloseDialog = () => {
 const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
   console.log('切换答案显示:', showAnswer.value)
+  console.log('当前项:', activeItem.value)
+  if (showAnswer.value && activeItem.value) {
+    const answers = getAnswersForMistake(activeItem.value)
+    console.log('找到的答案:', answers)
+  }
 }
 
 // 修改获取数据的过滤逻辑
@@ -70,18 +88,10 @@ onMounted(async () => {
   try {
     const result = await window.ipcRenderer.mistake.getMistakes()
     if (result.success && result.data) {
-      // 过滤掉没有元数据的项目
+      // 只过滤掉没有元数据的项目
       mistakeList.value = result.data.filter(item => {
         // 必须有metadata
-        if (!item.metadata) return false
-        
-        // 如果是配对项，只显示错题
-        if (item.metadata.isPaired) {
-          return item.metadata.type === 'mistake'
-        }
-        
-        // 未配对项，显示所有有类型的项目
-        return item.metadata.type === 'mistake' || item.metadata.type === 'answer'
+        return !!item.metadata
       })
     }
   } catch (err) {
@@ -154,24 +164,27 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
   }
 }
 
-// 添加导出函数
+// 修改导出函数
 const exportImages = async () => {
   try {
     loading.value = true
-    // 获取所有错题的路径
-    const imagePaths = mistakeList.value
-      .filter(item => item.metadata?.type === 'mistake')
-      .map(item => item.path)
     
-    if (imagePaths.length === 0) {
-      ElMessage.warning('没有可导出的错题')
-      return
-    }
-
-    // 通过 preload 定义的接口调用
-    const result = await window.ipcRenderer.file.export(imagePaths)
+    // 只传递最基本的数据
+    const exportItems = mistakeList.value.map(item => ({
+      path: item.path,
+      type: item.metadata?.type,
+      pairId: item.metadata?.pairId
+    }))
+    
+    const result = await window.ipcRenderer.file.exportMistakesAndAnswers(exportItems)
+    
     if (result.success) {
-      ElMessage.success(`导出成功，文件保存在: ${result.exportPath}`)
+      ElMessage.success(
+        `导出成功！\n` +
+        `错题数量: ${result.totalMistakes}\n` +
+        `答案数量: ${result.totalAnswers}\n` +
+        `保存位置: ${result.exportDir}`
+      )
     } else {
       ElMessage.error(result.error || '导出失败')
     }
@@ -230,6 +243,19 @@ const handleDelete = async (item: MistakeItem) => {
   } finally {
     loading.value = false
   }
+}
+
+// 修改获取答案的函数
+const getAnswersForMistake = (item: MistakeItem) => {
+  console.log('获取答案，当前项:', item)
+  console.log('当前项的 pairId:', item.metadata?.pairId)
+  if (!item.metadata?.pairId) return []
+  const answers = mistakeList.value.filter(
+    m => m.metadata?.pairId === item.metadata?.pairId && 
+    m.metadata?.type === 'answer'
+  )
+  console.log('所有答案:', answers)
+  return answers
 }
 </script>
 
@@ -342,41 +368,27 @@ const handleDelete = async (item: MistakeItem) => {
         />
       </div>
       
-      <div class="answer-control" v-if="activeItem.metadata?.isPaired">
+      <div class="answer-control" v-if="activeItem.metadata?.pairId">
         <el-button 
           type="primary" 
           @click="toggleAnswer"
-          :icon="showAnswer ? 'Hide' : 'View'"
         >
           {{ showAnswer ? '隐藏答案' : '查看答案' }}
         </el-button>
       </div>
       
-      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
-        <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
-        <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
-          <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
-               :key="answer.fileId"
-               class="answer-item"
-          >
-            <el-image 
-              :src="answer.preview"
-              :preview-src-list="[answer.preview]"
-              fit="contain"
-              class="detail-image"
-            />
-          </div>
-        </template>
-        
-        <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
-        <template v-else>
+      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairId">
+        <div v-for="answer in getAnswersForMistake(activeItem)" 
+             :key="answer.fileId"
+             class="answer-item"
+        >
           <el-image 
-            :src="activeItem.metadata.pairedWith.preview"
-            :preview-src-list="[activeItem.metadata.pairedWith.preview]"
+            :src="answer.preview"
+            :preview-src-list="[answer.preview]"
             fit="contain"
             class="detail-image"
           />
-        </template>
+        </div>
       </div>
     </div>
   </el-dialog>

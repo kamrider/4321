@@ -128,8 +128,8 @@ export interface IpcRenderer {
   file: {
     export: (paths: string[]) => Promise<{
       success: boolean
-      exportPath?: string
       error?: string
+      exportPath?: string
     }>
     exportTrainingHistory: () => Promise<{
       success: boolean
@@ -139,6 +139,13 @@ export interface IpcRenderer {
     delete: (fileId: string) => Promise<{
       success: boolean
       error?: string
+    }>
+    exportMistakesAndAnswers: (items: MistakeItem[]) => Promise<{
+      success: boolean
+      error?: string
+      exportDir?: string
+      totalMistakes?: number
+      totalAnswers?: number
     }>
   }
 }
@@ -278,7 +285,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   file: {
     export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
     exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history'),
-    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId)
+    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
+    exportMistakesAndAnswers: (items: MistakeItem[]) => 
+      ipcRenderer.invoke('file:export-mistakes-and-answers', items)
   }
 })
 

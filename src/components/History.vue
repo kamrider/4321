@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { Timer, Bell } from '@element-plus/icons-vue'
+import { Timer, Bell, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
@@ -20,6 +20,39 @@ const timerInterval = ref<number | null>(null)
 // 添加提醒相关的响应式变量
 const hasReachedOneMinute = ref(false)
 const audioContext = ref<AudioContext | null>(null)
+
+// 添加排序相关的状态
+const sortType = ref<'time' | 'proficiency'>('proficiency')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+
+// 添加排序后的列表计算属性
+const sortedHistoryList = computed(() => {
+  if (!historyList.value) return []
+  
+  return [...historyList.value].sort((a, b) => {
+    if (sortType.value === 'time') {
+      const timeA = new Date(a.uploadDate).getTime()
+      const timeB = new Date(b.uploadDate).getTime()
+      return sortOrder.value === 'desc' ? timeB - timeA : timeA - timeB
+    } else {
+      const profA = a.metadata?.proficiency || 0
+      const profB = b.metadata?.proficiency || 0
+      return sortOrder.value === 'desc' ? profB - profA : profA - profB
+    }
+  })
+})
+
+// 添加排序处理函数
+const handleSort = (type: 'time' | 'proficiency') => {
+  if (sortType.value === type) {
+    // 如果点击相同类型，切换排序顺序
+    sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+  } else {
+    // 如果点击不同类型，设置新类型并默认降序
+    sortType.value = type
+    sortOrder.value = 'desc'
+  }
+}
 
 // 添加音符频率常量
 const NOTES = {
@@ -397,18 +430,44 @@ watch(time, (newValue) => {
 
 <template>
   <div class="mistake-container">
-    <div class="header-actions">
-      <el-button type="primary" @click="exportHistory" :loading="loading">
-        导出训练历史
-      </el-button>
+    <!-- 添加顶部导航栏 -->
+    <div class="nav-header">
+      <div class="sort-controls">
+        <el-button-group>
+          <el-button 
+            :type="sortType === 'time' ? 'primary' : 'default'"
+            @click="handleSort('time')"
+          >
+            上传时间
+            <el-icon v-if="sortType === 'time'">
+              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+            </el-icon>
+          </el-button>
+          <el-button 
+            :type="sortType === 'proficiency' ? 'primary' : 'default'"
+            @click="handleSort('proficiency')"
+          >
+            熟练度
+            <el-icon v-if="sortType === 'proficiency'">
+              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+            </el-icon>
+          </el-button>
+        </el-button-group>
+      </div>
+      
+      <div class="header-actions">
+        <el-button type="primary" @click="exportHistory" :loading="loading">
+          导出训练历史
+        </el-button>
+      </div>
     </div>
-    
-    <el-empty v-if="!loading && historyList.length === 0" description="暂无错题" />
+
+    <el-empty v-if="!loading && sortedHistoryList.length === 0" description="暂无错题" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
       <template #default>
         <div class="preview-area">
-          <div v-for="item in historyList" 
+          <div v-for="item in sortedHistoryList" 
                :key="item.fileId" 
                class="preview-item"
                :class="{
@@ -881,5 +940,37 @@ watch(time, (newValue) => {
   width: auto;
   object-fit: contain;
   background-color: #f5f7fa;
+}
+
+.nav-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 20px;
+  background-color: var(--el-bg-color);
+  border-radius: 8px;
+  box-shadow: var(--el-box-shadow-lighter);
+  height: 60px;
+}
+
+.sort-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.sort-controls .el-button-group {
+  margin-right: 12px;
+}
+
+.sort-controls .el-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-controls .el-icon {
+  margin-left: 4px;
 }
 </style> 

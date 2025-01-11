@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -12,6 +12,39 @@ const error = ref<string | null>(null)
 const dialogVisible = ref(false)
 const activeItem = ref<MistakeItem | null>(null)
 const showAnswer = ref(false)
+
+// 添加排序相关的状态
+const sortType = ref<'time' | 'proficiency'>('time')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// 添加排序后的列表计算属性
+const sortedMistakeList = computed(() => {
+  if (!mistakeList.value) return []
+  
+  return [...mistakeList.value].sort((a, b) => {
+    if (sortType.value === 'time') {
+      const timeA = new Date(a.uploadDate).getTime()
+      const timeB = new Date(b.uploadDate).getTime()
+      return sortOrder.value === 'desc' ? timeB - timeA : timeA - timeB
+    } else {
+      const profA = a.metadata?.proficiency || 0
+      const profB = b.metadata?.proficiency || 0
+      return sortOrder.value === 'desc' ? profB - profA : profA - profB
+    }
+  })
+})
+
+// 添加排序处理函数
+const handleSort = (type: 'time' | 'proficiency') => {
+  if (sortType.value === type) {
+    // 如果点击相同类型，切换排序顺序
+    sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+  } else {
+    // 如果点击不同类型，设置新类型并默认降序
+    sortType.value = type
+    sortOrder.value = 'desc'
+  }
+}
 
 // 添加查看详情处理函数
 const handleViewDetail = (item: MistakeItem) => {
@@ -202,9 +235,31 @@ const handleDelete = async (item: MistakeItem) => {
 
 <template>
   <div class="mistake-container">
-    <!-- 添加顶部操作栏 -->
-    <div class="header">
-      <h2>错题列表</h2>
+    <!-- 添加顶部导航栏 -->
+    <div class="nav-header">
+      <div class="sort-controls">
+        <el-button-group>
+          <el-button 
+            :type="sortType === 'time' ? 'primary' : 'default'"
+            @click="handleSort('time')"
+          >
+            上传时间
+            <el-icon v-if="sortType === 'time'">
+              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+            </el-icon>
+          </el-button>
+          <el-button 
+            :type="sortType === 'proficiency' ? 'primary' : 'default'"
+            @click="handleSort('proficiency')"
+          >
+            熟练度
+            <el-icon v-if="sortType === 'proficiency'">
+              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+            </el-icon>
+          </el-button>
+        </el-button-group>
+      </div>
+      
       <div class="header-actions">
         <el-button type="primary" @click="exportImages" :loading="loading">
           导出错题
@@ -212,12 +267,12 @@ const handleDelete = async (item: MistakeItem) => {
       </div>
     </div>
 
-    <el-empty v-if="!loading && mistakeList.length === 0" description="暂无错题" />
+    <el-empty v-if="!loading && sortedMistakeList.length === 0" description="暂无错题" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
       <template #default>
         <div class="preview-area">
-          <div v-for="item in mistakeList" 
+          <div v-for="item in sortedMistakeList" 
                :key="item.fileId" 
                class="preview-item"
                :class="{
@@ -612,5 +667,37 @@ const handleDelete = async (item: MistakeItem) => {
 
 .preview-item:hover .delete-btn {
   opacity: 1;
+}
+
+.nav-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 20px;
+  background-color: var(--el-bg-color);
+  border-radius: 8px;
+  box-shadow: var(--el-box-shadow-lighter);
+  height: 60px;
+}
+
+.sort-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.sort-controls .el-button-group {
+  margin-right: 12px;
+}
+
+.sort-controls .el-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-controls .el-icon {
+  margin-left: 4px;
 }
 </style> 

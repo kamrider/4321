@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { Timer, Bell, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
@@ -24,6 +24,56 @@ const audioContext = ref<AudioContext | null>(null)
 // 添加排序相关的状态
 const sortType = ref<'time' | 'proficiency'>('proficiency')
 const sortOrder = ref<'asc' | 'desc'>('asc')
+
+// 添加计时器状态管理
+const timerStates = ref(new Map<string, number>())
+
+// 添加当前项目索引
+const currentIndex = ref(0)
+
+// 保存当前计时状态
+const saveCurrentTimerState = () => {
+  if (activeItem.value) {
+    timerStates.value.set(activeItem.value.fileId, time.value)
+  }
+}
+
+// 添加启动计时器的函数
+const startTimer = () => {
+  // 清理已存在的计时器
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+  }
+  // 启动新的计时器，每10ms更新一次
+  timerInterval.value = setInterval(() => {
+    time.value++
+  }, 10)
+}
+
+// 修改加载计时状态的函数
+const loadTimerState = (fileId: string) => {
+  time.value = timerStates.value.get(fileId) || 0
+  startTimer() // 加载状态后启动计时器
+}
+
+// 添加切换处理函数
+const handlePrevious = () => {
+  if (currentIndex.value > 0) {
+    saveCurrentTimerState()
+    currentIndex.value--
+    activeItem.value = sortedHistoryList.value[currentIndex.value]
+    loadTimerState(activeItem.value.fileId)
+  }
+}
+
+const handleNext = () => {
+  if (currentIndex.value < sortedHistoryList.value.length - 1) {
+    saveCurrentTimerState()
+    currentIndex.value++
+    activeItem.value = sortedHistoryList.value[currentIndex.value]
+    loadTimerState(activeItem.value.fileId)
+  }
+}
 
 // 添加排序后的列表计算属性
 const sortedHistoryList = computed(() => {
@@ -92,6 +142,21 @@ const formattedTime = computed(() => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
 })
 
+// 添加键盘事件处理函数
+const handleKeydown = (event: KeyboardEvent) => {
+  // 只在弹窗打开时处理键盘事件
+  if (!dialogVisible.value) return
+  
+  switch (event.key) {
+    case 'ArrowLeft':
+      handlePrevious()
+      break
+    case 'ArrowRight':
+      handleNext()
+      break
+  }
+}
+
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.mistake.getTrainingHistory()
@@ -106,6 +171,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  
+  // 添加键盘事件监听
+  window.addEventListener('keydown', handleKeydown)
 })
 
 // 复用 UploadMistake 中的日期格式化函数
@@ -205,30 +273,29 @@ const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
   dialogVisible.value = false
 }
 
-// 修改预览处理函数，添加计时器启动
+// 修改查看详情处理函数
 const handleViewDetail = (item: HistoryItem) => {
-  activeItem.value = item
-  dialogVisible.value = true
-  // 开始计时，每10ms更新一次以显示毫秒
-  time.value = 0
-  if (timerInterval.value) {
-    clearInterval(timerInterval.value)
+  if (activeItem.value) {
+    saveCurrentTimerState()
   }
-  timerInterval.value = setInterval(() => {
-    time.value++
-  }, 10)
+  currentIndex.value = sortedHistoryList.value.findIndex(i => i.fileId === item.fileId)
+  activeItem.value = item
+  loadTimerState(item.fileId)
+  dialogVisible.value = true
 }
 
-// 修改关闭预览处理函数，添加计时器清理
+// 修改关闭弹窗处理函数
 const handleCloseDialog = () => {
+  if (activeItem.value) {
+    saveCurrentTimerState()
+  }
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
     timerInterval.value = null
   }
   dialogVisible.value = false
   activeItem.value = null
-  showAnswer.value = false
-  hasReachedOneMinute.value = false // 重置提醒状态
+  time.value = 0
 }
 
 // 添加切换答案显示的函数
@@ -259,6 +326,9 @@ onUnmounted(() => {
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
   }
+  
+  // 移除键盘事件监听
+  window.removeEventListener('keydown', handleKeydown)
 })
 
 // 提交训练结果的方法
@@ -536,7 +606,28 @@ watch(time, (newValue) => {
     class="mistake-detail-dialog"
   >
     <div class="detail-container" v-if="activeItem">
-      <!-- 计时器 -->
+      <!-- 添加顶部导航按钮 -->
+      <div class="navigation-buttons">
+        <el-button
+          class="nav-button"
+          :disabled="currentIndex === 0"
+          @click="handlePrevious"
+          circle
+        >
+          <el-icon><ArrowLeft /></el-icon>
+        </el-button>
+
+        <el-button
+          class="nav-button"
+          :disabled="currentIndex === sortedHistoryList.length - 1"
+          @click="handleNext"
+          circle
+        >
+          <el-icon><ArrowRight /></el-icon>
+        </el-button>
+      </div>
+
+      <!-- 保持原有的计时器显示 -->
       <div class="timer-container">
         <div class="timer-display" 
              :style="{ 
@@ -545,7 +636,9 @@ watch(time, (newValue) => {
                borderColor: currentTimeColor.color
              }"
         >
-          <el-icon class="timer-icon" :style="{ color: currentTimeColor.color }"><Timer /></el-icon>
+          <el-icon class="timer-icon" :style="{ color: currentTimeColor.color }">
+            <Timer />
+          </el-icon>
           <span class="timer-text">{{ formattedTime }}</span>
           <el-icon v-if="time > 0" class="bell-icon" :style="{ color: currentTimeColor.color }">
             <Bell />
@@ -972,5 +1065,30 @@ watch(time, (newValue) => {
 
 .sort-controls .el-icon {
   margin-left: 4px;
+}
+
+.navigation-buttons {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 2;
+}
+
+.nav-button {
+  background-color: rgba(255, 255, 255, 0.8);
+  border: none;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.nav-button:hover {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.nav-button.is-disabled {
+  background-color: rgba(255, 255, 255, 0.5);
 }
 </style> 

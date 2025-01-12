@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
+import { app } from 'electron'
 
 const METADATA_FILE = '.metadata.json'
 

@@ -1000,14 +1000,22 @@ watch(time, (newValue) => {
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
+  width: 120px;  /* 增加宽度 */
+  height: 120px;  /* 增加高度，与宽度相同形成正方形 */
+  border-radius: 45px;  /* 调整圆角 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;  /* 增加字体大小 */
+  padding: 0;  /* 移除内边距 */
 }
 
 .left-button {
-  left: 10px;
+  left: -90px;
 }
 
 .right-button {
-  right: 10px;
+  right: -90px;
 }
 
 .answer-control {

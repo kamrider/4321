@@ -31,6 +31,10 @@ const timerStates = ref(new Map<string, number>())
 // 添加当前项目索引
 const currentIndex = ref(0)
 
+// 在现有的响应式变量声明后添加
+const metadataDialogVisible = ref(false)
+const selectedItem = ref<HistoryItem | null>(null)
+
 // 保存当前计时状态
 const saveCurrentTimerState = () => {
   if (activeItem.value) {
@@ -185,8 +189,7 @@ const formatDate = (dateStr: string) => {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit'
     })
   } catch (e) {
     return dateStr
@@ -498,6 +501,13 @@ watch(time, (newValue) => {
     })
   }
 })
+
+// 添加右键菜单处理函数
+const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
+  event.preventDefault()
+  selectedItem.value = item
+  metadataDialogVisible.value = true
+}
 </script>
 
 <template>
@@ -542,11 +552,13 @@ watch(time, (newValue) => {
           <div v-for="item in sortedHistoryList" 
                :key="item.fileId" 
                class="preview-item"
+               @contextmenu="(e) => handleContextMenu(e, item)"
                :class="{
                  'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
                  'is-paired': item.metadata?.isPaired
-               }">
+               }"
+          >
             <el-image 
               :src="item.preview" 
               :preview-src-list="[]"
@@ -717,6 +729,43 @@ watch(time, (newValue) => {
           />
         </template>
       </div>
+    </div>
+  </el-dialog>
+
+  <!-- 添加元数据弹窗 -->
+  <el-dialog
+    v-model="metadataDialogVisible"
+    title="训练信息"
+    width="500px"
+  >
+    <div v-if="selectedItem" class="metadata-content">
+      <el-descriptions :column="1" border>
+        <el-descriptions-item label="熟练度">
+          {{ selectedItem.metadata.proficiency }}
+        </el-descriptions-item>
+        <el-descriptions-item label="训练间隔">
+          {{ selectedItem.metadata.trainingInterval }} 天
+        </el-descriptions-item>
+        <el-descriptions-item label="上次训练">
+          {{ formatDate(selectedItem.metadata.lastTrainingDate) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="下次训练">
+          {{ formatDate(selectedItem.metadata.nextTrainingDate) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="科目">
+          {{ selectedItem.metadata.subject || '未设置' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="标签">
+          <el-tag 
+            v-for="tag in selectedItem.metadata.tags" 
+            :key="tag"
+            size="small"
+            class="mx-1"
+          >
+            {{ tag }}
+          </el-tag>
+        </el-descriptions-item>
+      </el-descriptions>
     </div>
   </el-dialog>
 </template>
@@ -1100,5 +1149,12 @@ watch(time, (newValue) => {
 
 .nav-button.is-disabled {
   background-color: rgba(255, 255, 255, 0.5);
+}
+
+.metadata-content {
+  padding: 20px;
+}
+.mx-1 {
+  margin: 0 4px;
 }
 </style> 

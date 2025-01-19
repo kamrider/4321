@@ -35,6 +35,17 @@ const currentIndex = ref(0)
 const metadataDialogVisible = ref(false)
 const selectedItem = ref<HistoryItem | null>(null)
 
+// 考试模式相关的状态
+const isExamMode = ref(false)
+const selectedExamItems = ref<HistoryItem[]>([])
+
+// 计算已选题目的总时间
+const totalExamTime = computed(() => {
+  return selectedExamItems.value.reduce((total, item) => {
+    return total + (item.metadata.answerTimeLimit || 300)
+  }, 0)
+})
+
 // 保存当前计时状态
 const saveCurrentTimerState = () => {
   if (activeItem.value) {
@@ -508,6 +519,32 @@ const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
   selectedItem.value = item
   metadataDialogVisible.value = true
 }
+
+// 考试模式相关方法
+const toggleExamMode = () => {
+  isExamMode.value = !isExamMode.value
+  if (!isExamMode.value) {
+    selectedExamItems.value = []
+  }
+}
+
+const toggleItemSelection = (item: HistoryItem) => {
+  const index = selectedExamItems.value.findIndex(i => i.fileId === item.fileId)
+  if (index === -1) {
+    selectedExamItems.value.push(item)
+  } else {
+    selectedExamItems.value.splice(index, 1)
+  }
+}
+
+const isItemSelected = (item: HistoryItem) => {
+  return selectedExamItems.value.some(i => i.fileId === item.fileId)
+}
+
+const cancelExamMode = () => {
+  isExamMode.value = false
+  selectedExamItems.value = []
+}
 </script>
 
 <template>
@@ -541,6 +578,35 @@ const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
         <el-button type="primary" @click="exportHistory" :loading="loading">
           导出训练历史
         </el-button>
+        <div class="exam-mode-controls">
+          <el-button 
+            type="primary" 
+            @click="toggleExamMode"
+            :class="{ 'is-active': isExamMode }"
+          >
+            {{ isExamMode ? '退出考试模式' : '进入考试模式' }}
+          </el-button>
+          
+          <template v-if="isExamMode">
+            <div class="exam-info">
+              已选择: {{ selectedExamItems.length }} 题
+              <span class="exam-time">总时间: {{ Math.floor(totalExamTime / 60) }}分{{ totalExamTime % 60 }}秒</span>
+            </div>
+            <el-button 
+              type="success" 
+              :disabled="selectedExamItems.length === 0"
+              @click="startExam"
+            >
+              开始考试
+            </el-button>
+            <el-button 
+              type="info" 
+              @click="cancelExamMode"
+            >
+              取消
+            </el-button>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -556,15 +622,17 @@ const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
                :class="{
                  'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
-                 'is-paired': item.metadata?.isPaired
+                 'is-paired': item.metadata?.isPaired,
+                 'is-selectable': isExamMode,
+                 'is-selected': isExamMode && isItemSelected(item)
                }"
+               @click="isExamMode ? toggleItemSelection(item) : handleViewDetail(item)"
           >
             <el-image 
               :src="item.preview" 
               :preview-src-list="[]"
               fit="contain"
               class="preview-image"
-              @click.stop="handleViewDetail(item)"
             />
             <div class="file-info">
               <p class="file-name">{{ item.originalFileName }}</p>
@@ -1159,5 +1227,36 @@ const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
 }
 .mx-1 {
   margin: 0 4px;
+}
+
+.exam-mode-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.exam-info {
+  background-color: var(--el-color-info-light-9);
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex;
+  gap: 16px;
+}
+
+.exam-time {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.preview-item.is-selectable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.preview-item.is-selected {
+  border: 2px solid var(--el-color-primary);
+  transform: scale(1.02);
+  box-shadow: 0 0 10px rgba(var(--el-color-primary-rgb), 0.3);
 }
 </style> 

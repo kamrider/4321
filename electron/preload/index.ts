@@ -68,6 +68,7 @@ export interface MistakeItem {
     type?: 'mistake' | 'answer'
     pairId?: string
     isPaired?: boolean
+    answerTimeLimit: number
   }
 }
 
@@ -88,6 +89,7 @@ interface TrainingNextInfo {
   nextTrainingDate: string
   currentProficiency: number
   currentInterval: number
+  answerTimeLimit: number
 }
 
 // 在现有的接口定义中添加配置相关的类型

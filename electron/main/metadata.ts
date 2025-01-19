@@ -58,7 +58,8 @@ export class MetadataManager {
       trainingRecords: [],
       type: 'mistake',
       pairId: null,
-      isPaired: false
+      isPaired: false,
+      answerTimeLimit: 300
     }
   }
 
@@ -119,6 +120,26 @@ export class MetadataManager {
     }
   }
 
+  private async migrateMetadata() {
+    let hasChanges = false
+    
+    // 遍历所有文件元数据
+    for (const fileId in this.metadata.files) {
+      const file = this.metadata.files[fileId]
+      
+      // 如果没有 answerTimeLimit 字段，添加默认值（5分钟 = 300秒）
+      if (file.answerTimeLimit === undefined) {
+        file.answerTimeLimit = 300
+        hasChanges = true
+      }
+    }
+
+    // 如果有更改，保存元数据
+    if (hasChanges) {
+      await this.saveMetadata()
+    }
+  }
+
   private loadMetadata() {
     try {
       if (fs.existsSync(this.metadataPath)) {
@@ -127,10 +148,16 @@ export class MetadataManager {
         // 更新基础目录为当前目录
         parsed.baseDir = this.baseDir
         this.metadata = parsed
+        
+        // 在加载后立即进行迁移
+        this.migrateMetadata()
       } else {
         // 如果元数据文件不存在，创建一个新的
         this.metadata = this.createDefaultStore(this.baseDir)
         this.saveMetadata()
+        
+        // 在创建新元数据后也进行迁移
+        this.migrateMetadata()
       }
     } catch (error) {
       console.error('加载元数据失败:', error)
@@ -139,6 +166,9 @@ export class MetadataManager {
         baseDir: this.baseDir,
         files: {}
       }
+      
+      // 在创建新元数据后也进行迁移
+      this.migrateMetadata()
     }
   }
 

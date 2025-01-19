@@ -5,6 +5,7 @@ interface TrainingRecord {
   proficiencyAfter: number    // 训练后熟练度
   intervalAfter: number       // 训练后设定的下次间隔
   isOnTime: boolean          // 是否按时训练
+  answerTime?: number         // 实际答题时间（毫秒）
 }
 
 interface FileMetadata {
@@ -29,6 +30,7 @@ interface FileMetadata {
   type?: 'mistake' | 'answer'    // 图片类型
   pairId?: string               // 配对的图片ID
   isPaired?: boolean           // 是否已配对
+  answerTimeLimit?: number     // 答题时限（秒）
 }
 
 interface MetadataStore {

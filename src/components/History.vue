@@ -752,6 +752,9 @@ const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
         <el-descriptions-item label="下次训练">
           {{ formatDate(selectedItem.metadata.nextTrainingDate) }}
         </el-descriptions-item>
+        <el-descriptions-item label="答题时限">
+          {{ selectedItem.metadata.answerTimeLimit }} 秒
+        </el-descriptions-item>
         <el-descriptions-item label="科目">
           {{ selectedItem.metadata.subject || '未设置' }}
         </el-descriptions-item>

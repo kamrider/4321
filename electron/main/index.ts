@@ -703,7 +703,8 @@ ipcMain.handle('training:get-next', async (event, fileId: string) => {
       data: {
         nextTrainingDate: fileMetadata.nextTrainingDate,
         currentProficiency: fileMetadata.proficiency,
-        currentInterval: fileMetadata.trainingInterval
+        currentInterval: fileMetadata.trainingInterval,
+        answerTimeLimit: fileMetadata.answerTimeLimit
       }
     }
   } catch (error) {

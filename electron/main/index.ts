@@ -636,7 +636,7 @@ ipcMain.handle('file:get-mistakes', async () => {
 })
 
 // 提交训练结果
-ipcMain.handle('training:submit-result', async (event, fileId: string, success: boolean, trainingDate?: string) => {
+  ipcMain.handle('training:submit-result', async (event, fileId: string, success: boolean, trainingDate?: string) => {
   try {
     const metadata = await metadataManager.getMetadata()
     const fileMetadata = metadata.files[fileId]

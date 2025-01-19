@@ -282,6 +282,7 @@ const handleViewDetail = (item: HistoryItem) => {
   activeItem.value = item
   loadTimerState(item.fileId)
   dialogVisible.value = true
+  showAnswer.value = false
 }
 
 // 修改关闭弹窗处理函数
@@ -296,6 +297,7 @@ const handleCloseDialog = () => {
   dialogVisible.value = false
   activeItem.value = null
   time.value = 0
+  showAnswer.value = false
 }
 
 // 添加切换答案显示的函数

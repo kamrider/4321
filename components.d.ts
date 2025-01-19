@@ -21,11 +21,9 @@ declare module 'vue' {
     ElMenu: typeof import('element-plus/es')['ElMenu']
     ElMenuItem: typeof import('element-plus/es')['ElMenuItem']
     ElProgress: typeof import('element-plus/es')['ElProgress']
-    ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
-    ElVirtualList: typeof import('element-plus/es')['ElVirtualList']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     History: typeof import('./src/components/History.vue')['default']
     Members: typeof import('./src/components/Members.vue')['default']
@@ -38,6 +36,7 @@ declare module 'vue' {
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
     Training: typeof import('./src/components/Training.vue')['default']
     TrainingConfigPanel: typeof import('./src/components/TrainingConfigPanel.vue')['default']
+    TrainingSimulator: typeof import('./src/components/TrainingSimulator.vue')['default']
     UploadMistake: typeof import('./src/components/UploadMistake.vue')['default']
   }
   export interface ComponentCustomProperties {

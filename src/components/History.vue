@@ -551,33 +551,35 @@ const cancelExamMode = () => {
   <div class="mistake-container">
     <!-- 添加顶部导航栏 -->
     <div class="nav-header">
-      <div class="sort-controls">
-        <el-button-group>
-          <el-button 
-            :type="sortType === 'time' ? 'primary' : 'default'"
-            @click="handleSort('time')"
-          >
-            上传时间
-            <el-icon v-if="sortType === 'time'">
-              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
-            </el-icon>
-          </el-button>
-          <el-button 
-            :type="sortType === 'proficiency' ? 'primary' : 'default'"
-            @click="handleSort('proficiency')"
-          >
-            熟练度
-            <el-icon v-if="sortType === 'proficiency'">
-              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
-            </el-icon>
-          </el-button>
-        </el-button-group>
-      </div>
-      
-      <div class="header-actions">
-        <el-button type="primary" @click="exportHistory" :loading="loading">
+      <div class="header-left">
+        <div class="sort-controls">
+          <el-button-group>
+            <el-button 
+              :type="sortType === 'time' ? 'primary' : 'default'"
+              @click="handleSort('time')"
+            >
+              上传时间
+              <el-icon v-if="sortType === 'time'">
+                <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+              </el-icon>
+            </el-button>
+            <el-button 
+              :type="sortType === 'proficiency' ? 'primary' : 'default'"
+              @click="handleSort('proficiency')"
+            >
+              熟练度
+              <el-icon v-if="sortType === 'proficiency'">
+                <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+              </el-icon>
+            </el-button>
+          </el-button-group>
+        </div>
+        <el-button type="info" @click="exportHistory" :loading="loading">
           导出训练历史
         </el-button>
+      </div>
+      
+      <div class="header-right">
         <div class="exam-mode-controls">
           <el-button 
             type="primary" 
@@ -598,12 +600,6 @@ const cancelExamMode = () => {
               @click="startExam"
             >
               开始考试
-            </el-button>
-            <el-button 
-              type="info" 
-              @click="cancelExamMode"
-            >
-              取消
             </el-button>
           </template>
         </div>
@@ -1177,6 +1173,17 @@ const cancelExamMode = () => {
   height: 60px;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
 .sort-controls {
   display: flex;
   gap: 12px;
@@ -1231,8 +1238,8 @@ const cancelExamMode = () => {
 
 .exam-mode-controls {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 12px;
 }
 
 .exam-info {

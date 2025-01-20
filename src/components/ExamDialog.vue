@@ -70,7 +70,7 @@ const finishExam = async () => {
   if (!examId.value) return
   
   try {
-    const result = await window.electron.exam.complete(examId.value)
+    const result = await window.ipcRenderer.exam.complete(examId.value)
     if (result.success) {
       ElMessage.success('考试完成')
       dialogVisible.value = false

@@ -4,6 +4,7 @@ import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element
 import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 import ExamDialog from './ExamDialog.vue'
+import MetadataDialog from './MetadataDialog.vue'
 
 const historyList = ref<HistoryItem[]>([])
 const loading = ref(true)
@@ -811,45 +812,11 @@ const handleExamFinish = (results: Array<{ fileId: string, remembered: boolean }
     </div>
   </el-dialog>
 
-  <!-- 添加元数据弹窗 -->
-  <el-dialog
+  <!-- 使用元数据弹窗组件 -->
+  <MetadataDialog
     v-model="metadataDialogVisible"
-    title="训练信息"
-    width="500px"
-  >
-    <div v-if="selectedItem" class="metadata-content">
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="熟练度">
-          {{ selectedItem.metadata.proficiency }}
-        </el-descriptions-item>
-        <el-descriptions-item label="训练间隔">
-          {{ selectedItem.metadata.trainingInterval }} 天
-        </el-descriptions-item>
-        <el-descriptions-item label="上次训练">
-          {{ formatDate(selectedItem.metadata.lastTrainingDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="下次训练">
-          {{ formatDate(selectedItem.metadata.nextTrainingDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="答题时限">
-          {{ selectedItem.metadata.answerTimeLimit }} 秒
-        </el-descriptions-item>
-        <el-descriptions-item label="科目">
-          {{ selectedItem.metadata.subject || '未设置' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="标签">
-          <el-tag 
-            v-for="tag in selectedItem.metadata.tags" 
-            :key="tag"
-            size="small"
-            class="mx-1"
-          >
-            {{ tag }}
-          </el-tag>
-        </el-descriptions-item>
-      </el-descriptions>
-    </div>
-  </el-dialog>
+    :item="selectedItem"
+  />
 
   <!-- 在 el-dialog 后面添加考试弹窗 -->
   <ExamDialog

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import MetadataDialog from './MetadataDialog.vue'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -16,6 +17,10 @@ const showAnswer = ref(false)
 // 添加排序相关的状态
 const sortType = ref<'time' | 'proficiency'>('time')
 const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// 添加元数据弹窗相关状态
+const metadataDialogVisible = ref(false)
+const selectedItem = ref<MistakeItem | null>(null)
 
 // 添加排序后的列表计算属性
 const sortedMistakeList = computed(() => {
@@ -63,6 +68,13 @@ const handleCloseDialog = () => {
 const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
   console.log('切换答案显示:', showAnswer.value)
+}
+
+// 添加右键菜单处理函数
+const handleContextMenu = (event: MouseEvent, item: MistakeItem) => {
+  event.preventDefault()
+  selectedItem.value = item
+  metadataDialogVisible.value = true
 }
 
 // 修改获取数据的过滤逻辑
@@ -276,11 +288,12 @@ const handleDelete = async (item: MistakeItem) => {
                :key="item.fileId" 
                class="preview-item"
                :class="{
-                 'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
-                 'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
-                 'is-paired': item.metadata?.isPaired
+                 'is-mistake': !item.metadata.isPaired && item.metadata.type === 'mistake',
+                 'is-answer': !item.metadata.isPaired && item.metadata.type === 'answer',
+                 'is-paired': item.metadata.isPaired
                }"
-               @click="item.metadata?.isPaired ? handleViewDetail(item) : null">
+               @click="item.metadata?.isPaired ? handleViewDetail(item) : null"
+               @contextmenu="handleContextMenu($event, item)">
             <el-button
               class="delete-btn"
               type="danger"
@@ -380,6 +393,12 @@ const handleDelete = async (item: MistakeItem) => {
       </div>
     </div>
   </el-dialog>
+
+  <!-- 在最后添加元数据弹窗组件 -->
+  <MetadataDialog
+    v-model="metadataDialogVisible"
+    :item="selectedItem"
+  />
 </template>
 
 <style scoped>

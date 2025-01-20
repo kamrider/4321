@@ -145,6 +145,41 @@ export interface IpcRenderer {
   }
 }
 
+// 添加考试相关的类型定义
+export interface ExamResult<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+}
+
+export interface ExamRecord {
+  id: string                     
+  startTime: string             
+  endTime?: string             
+  status: 'ongoing' | 'paused' | 'completed' | 'abandoned'           
+  currentIndex: number         
+  items: ExamItem[]           
+  totalTime: number           
+  usedTime: number
+  isGrading: boolean          
+  gradingIndex?: number       
+}
+
+export interface ExamItem {
+  fileId: string              
+  timeLimit: number          
+  timeSpent: number         
+  preview: string           
+  status: 'pending' | 'ongoing' | 'completed' | 'grading' | 'graded'    
+  answer?: boolean          
+  answeredAt?: string       
+  gradeResult?: {           
+    isCorrect: boolean      
+    gradedAt: string       
+    trainingRecord?: TrainingRecord  
+  }
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {

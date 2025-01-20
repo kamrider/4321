@@ -1035,7 +1035,7 @@ ipcMain.handle('member:create', async (_, memberName: string) => {
 ipcMain.handle('member:switch', async (_, memberName: string) => {
   try {
     await metadataManager.switchMember(memberName)
-    // 更新考试管理器实例
+    // 初始化 ExamManager
     examManager = new ExamManager(metadataManager.getCurrentMemberDir())
     return { success: true }
   } catch (error) {
@@ -1330,5 +1330,41 @@ ipcMain.handle('exam:delete', async (_, examId: string) => {
     return { success }
   } catch (error) {
     return { success: false, error: error.message }
+  }
+})
+
+// 在选择用户成功后初始化 examManager
+ipcMain.handle('user:select', async (_, userId: string) => {
+  try {
+    const userDir = path.join(targetDirectory, 'users', userId)
+    
+    // 初始化用户目录
+    if (!fs.existsSync(userDir)) {
+      fs.mkdirSync(userDir, { recursive: true })
+    }
+
+    // 初始化 MetadataManager
+    metadataManager = new MetadataManager(userDir)
+    await metadataManager.loadMetadata()
+
+    // 初始化 TrainingManager
+    trainingManager = new TrainingManager(userDir)
+
+    // 初始化 ExamManager
+    examManager = new ExamManager(userDir)
+
+    return {
+      success: true,
+      data: {
+        id: userId,
+        directory: userDir
+      }
+    }
+  } catch (error) {
+    console.error('选择用户失败:', error)
+    return {
+      success: false,
+      error: error.message || '选择用户失败'
+    }
   }
 })

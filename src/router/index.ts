@@ -5,6 +5,7 @@ import Mistake from '../components/Mistake.vue'
 import NotFound from '../components/NotFound.vue'
 import History from '../components/History.vue'
 import Members from '../components/Members.vue'
+import Exam from '../components/Exam.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -41,6 +42,10 @@ const router = createRouter({
       path: '/pair-mistake',
       name: 'PairMistake',
       component: () => import('../components/PairMistake.vue')
+    },
+    {
+      path: '/exam',
+      component: Exam
     }
   ]
 })

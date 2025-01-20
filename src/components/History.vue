@@ -2,17 +2,17 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
+import type { MistakeItem, ExamRecord, ExamItem } from '../../electron/preload'
 import ExamDialog from './ExamDialog.vue'
 import MetadataDialog from './MetadataDialog.vue'
 
-const historyList = ref<HistoryItem[]>([])
+const historyList = ref<MistakeItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
 // 添加预览相关的响应式变量
 const dialogVisible = ref(false)
-const activeItem = ref<HistoryItem | null>(null)
+const activeItem = ref<MistakeItem | null>(null)
 const showAnswer = ref(false)
 
 // 添加计时器相关的响应式变量
@@ -35,11 +35,11 @@ const currentIndex = ref(0)
 
 // 在现有的响应式变量声明后添加
 const metadataDialogVisible = ref(false)
-const selectedItem = ref<HistoryItem | null>(null)
+const selectedItem = ref<MistakeItem | null>(null)
 
 // 考试模式相关的状态
 const isExamMode = ref(false)
-const selectedExamItems = ref<HistoryItem[]>([])
+const selectedExamItems = ref<MistakeItem[]>([])
 const showExamDialog = ref(false)
 
 // 计算已选题目的总时间
@@ -256,7 +256,7 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
 }
 
 // 修改答题函数，使用正确的 submitResult 方法
-const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
+const handleRemembered = async (item: MistakeItem, remembered: boolean) => {
   // 停止计时
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
@@ -291,7 +291,7 @@ const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
 }
 
 // 修改查看详情处理函数
-const handleViewDetail = (item: HistoryItem) => {
+const handleViewDetail = (item: MistakeItem) => {
   if (activeItem.value) {
     saveCurrentTimerState()
   }
@@ -517,7 +517,7 @@ watch(time, (newValue) => {
 })
 
 // 添加右键菜单处理函数
-const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
+const handleContextMenu = (event: MouseEvent, item: MistakeItem) => {
   event.preventDefault()
   selectedItem.value = item
   metadataDialogVisible.value = true
@@ -531,7 +531,7 @@ const toggleExamMode = () => {
   }
 }
 
-const toggleItemSelection = (item: HistoryItem) => {
+const toggleItemSelection = (item: MistakeItem) => {
   const index = selectedExamItems.value.findIndex(i => i.fileId === item.fileId)
   if (index === -1) {
     selectedExamItems.value.push(item)
@@ -540,7 +540,7 @@ const toggleItemSelection = (item: HistoryItem) => {
   }
 }
 
-const isItemSelected = (item: HistoryItem) => {
+const isItemSelected = (item: MistakeItem) => {
   return selectedExamItems.value.some(i => i.fileId === item.fileId)
 }
 
@@ -551,15 +551,21 @@ const cancelExamMode = () => {
 
 // 开始考试
 const startExam = () => {
+  if (selectedExamItems.value.length === 0) {
+    ElMessage.warning('请先选择考试题目')
+    return
+  }
+  console.log('开始考试，选中的题目：', selectedExamItems.value)
   showExamDialog.value = true
 }
 
 // 处理考试结束
 const handleExamFinish = (results: Array<{ fileId: string, remembered: boolean }>) => {
-  // 处理考试结果
+  console.log('考试完成，结果：', results)
   showExamDialog.value = false
   isExamMode.value = false
   selectedExamItems.value = []
+  ElMessage.success('考试完成！')
 }
 </script>
 

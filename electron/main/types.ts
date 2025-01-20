@@ -44,4 +44,38 @@ interface MetadataStore {
   files: {
     [id: string]: FileMetadata
   }
-} 
+}
+
+// 在现有的接口定义后添加考试相关的类型
+
+interface ExamRecord {
+  id: string                     
+  startTime: string             
+  endTime?: string             
+  status: ExamStatus           
+  currentIndex: number         
+  items: ExamItem[]           
+  totalTime: number           
+  usedTime: number
+  isGrading: boolean          // 是否在评分阶段
+  gradingIndex?: number       // 当前评分的题目索引
+}
+
+type ExamStatus = 'ongoing' | 'paused' | 'completed' | 'abandoned'
+
+interface ExamItem {
+  fileId: string              
+  timeLimit: number          
+  timeSpent: number         
+  preview: string           
+  status: ExamItemStatus    
+  answer?: boolean          // 考试时的作答结果
+  answeredAt?: string       
+  gradeResult?: {           // 评分结果
+    isCorrect: boolean      // 是否正确
+    gradedAt: string       // 评分时间
+    trainingRecord?: TrainingRecord  // 关联的训练记录
+  }
+}
+
+type ExamItemStatus = 'pending' | 'ongoing' | 'completed' | 'grading' | 'graded' 

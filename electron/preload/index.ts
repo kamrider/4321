@@ -281,6 +281,62 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
     exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history'),
     delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId)
+  },
+
+  // 添加考试相关方法
+  exam: {
+    // 开始新考试
+    start: async (fileIds: string[]): Promise<ExamResult<ExamRecord>> => {
+      if (!fileIds?.length) {
+        return { success: false, error: '请选择考试题目' }
+      }
+      return await ipcRenderer.invoke('exam:start', fileIds)
+    },
+
+    // 获取考试记录
+    get: async (examId: string): Promise<ExamResult<ExamRecord>> => {
+      if (!examId?.trim()) {
+        return { success: false, error: '无效的考试ID' }
+      }
+      return await ipcRenderer.invoke('exam:get', examId)
+    },
+
+    // 获取所有考试记录
+    getAll: async (): Promise<ExamResult<ExamRecord[]>> => {
+      return await ipcRenderer.invoke('exam:get-all')
+    },
+
+    // 更新考试状态
+    update: async (examId: string, updates: Partial<ExamRecord>): Promise<ExamResult> => {
+      if (!examId?.trim()) {
+        return { success: false, error: '无效的考试ID' }
+      }
+      return await ipcRenderer.invoke('exam:update', examId, updates)
+    },
+
+    // 更新题目状态
+    updateItem: async (examId: string, itemIndex: number, updates: Partial<ExamItem>): Promise<ExamResult> => {
+      if (!examId?.trim()) {
+        return { success: false, error: '无效的考试ID' }
+      }
+      return await ipcRenderer.invoke('exam:update-item', examId, itemIndex, updates)
+    },
+
+    // 完成考试
+    complete: async (examId: string): Promise<ExamResult> => {
+      if (!examId?.trim()) {
+        return { success: false, error: '无效的考试ID' }
+      }
+      return await ipcRenderer.invoke('exam:complete', examId)
+    },
+
+    // 删除考试记录
+    delete: async (examId: string): Promise<ExamResult> => {
+      if (!examId?.trim()) {
+        return { success: false, error: '无效的考试ID' }
+      }
+      return await ipcRenderer.invoke('exam:delete', examId)
+    }
   }
 })
 

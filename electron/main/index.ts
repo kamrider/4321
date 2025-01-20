@@ -9,6 +9,8 @@ import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
 import type { TrainingConfig } from './training-manager'
 import { v4 as uuidv4 } from 'uuid'
+import { ExamManager } from './exam-manager'
+import type { ExamRecord, ExamItem } from './exam-manager'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -135,6 +137,9 @@ let metadataManager = new MetadataManager(targetDirectory)
 
 // 初始化训练管理器
 const trainingManager = new TrainingManager(configPath)
+
+// 创建考试管理器实例
+let examManager: ExamManager | null = null
 
 // 修改上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
@@ -1029,17 +1034,12 @@ ipcMain.handle('member:create', async (_, memberName: string) => {
 // 切换成员
 ipcMain.handle('member:switch', async (_, memberName: string) => {
   try {
-    const success = await metadataManager.switchMember(memberName)
-    return {
-      success,
-      message: success ? '切换成功' : '切换失败'
-    }
+    await metadataManager.switchMember(memberName)
+    // 更新考试管理器实例
+    examManager = new ExamManager(metadataManager.getCurrentMemberDir())
+    return { success: true }
   } catch (error) {
-    console.error('切换成员失败:', error)
-    return {
-      success: false,
-      error: error.message
-    }
+    return { success: false, error: error.message }
   }
 })
 
@@ -1255,5 +1255,80 @@ ipcMain.handle('file:delete', async (event, fileId: string) => {
       success: false,
       error: error.message || '删除失败'
     }
+  }
+})
+
+// 开始新考试
+ipcMain.handle('exam:start', async (_, fileIds: string[]) => {
+  try {
+    if (!examManager) {
+      throw new Error('请先选择用户')
+    }
+    const metadata = await metadataManager.getMetadata()
+    const items = fileIds.map(id => metadata.files[id])
+    const exam = await examManager.createExam(items)
+    return { success: true, data: exam }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 获取考试记录
+ipcMain.handle('exam:get', async (_, examId: string) => {
+  try {
+    const exam = await examManager.getExam(examId)
+    return { success: true, data: exam }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 获取所有考试记录
+ipcMain.handle('exam:get-all', async () => {
+  try {
+    const exams = await examManager.getAllExams()
+    return { success: true, data: exams }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 更新考试状态
+ipcMain.handle('exam:update', async (_, examId: string, updates: Partial<ExamRecord>) => {
+  try {
+    const success = await examManager.updateExam(examId, updates)
+    return { success }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 更新题目状态
+ipcMain.handle('exam:update-item', async (_, examId: string, itemIndex: number, updates: Partial<ExamItem>) => {
+  try {
+    const success = await examManager.updateExamItem(examId, itemIndex, updates)
+    return { success }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 完成考试
+ipcMain.handle('exam:complete', async (_, examId: string) => {
+  try {
+    const success = await examManager.completeExam(examId)
+    return { success }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 删除考试记录
+ipcMain.handle('exam:delete', async (_, examId: string) => {
+  try {
+    const success = await examManager.deleteExam(examId)
+    return { success }
+  } catch (error) {
+    return { success: false, error: error.message }
   }
 })

@@ -356,6 +356,7 @@ export class MetadataManager {
     try {
       const memberDir = path.join(this.membersDir, memberName)
       const memberFilesDir = path.join(memberDir, 'files')
+      const memberExamsDir = path.join(memberDir, 'exams')
       
       // 检查成员是否已存在
       if (fs.existsSync(memberDir)) {
@@ -365,6 +366,9 @@ export class MetadataManager {
       // 创建成员目录结构
       await fs.promises.mkdir(memberDir, { recursive: true })
       await fs.promises.mkdir(memberFilesDir, { recursive: true })
+      await fs.promises.mkdir(memberExamsDir, { recursive: true })
+      await fs.promises.mkdir(path.join(memberExamsDir, 'ongoing'), { recursive: true })
+      await fs.promises.mkdir(path.join(memberExamsDir, 'completed'), { recursive: true })
       
       // 创建成员的 metadata 文件
       const memberMetadataPath = path.join(memberDir, METADATA_FILE)

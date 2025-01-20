@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
+import ExamDialog from './ExamDialog.vue'
 
 const historyList = ref<HistoryItem[]>([])
 const loading = ref(true)
@@ -38,6 +39,7 @@ const selectedItem = ref<HistoryItem | null>(null)
 // 考试模式相关的状态
 const isExamMode = ref(false)
 const selectedExamItems = ref<HistoryItem[]>([])
+const showExamDialog = ref(false)
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -545,6 +547,19 @@ const cancelExamMode = () => {
   isExamMode.value = false
   selectedExamItems.value = []
 }
+
+// 开始考试
+const startExam = () => {
+  showExamDialog.value = true
+}
+
+// 处理考试结束
+const handleExamFinish = (results: Array<{ fileId: string, remembered: boolean }>) => {
+  // 处理考试结果
+  showExamDialog.value = false
+  isExamMode.value = false
+  selectedExamItems.value = []
+}
 </script>
 
 <template>
@@ -835,6 +850,13 @@ const cancelExamMode = () => {
       </el-descriptions>
     </div>
   </el-dialog>
+
+  <!-- 在 el-dialog 后面添加考试弹窗 -->
+  <ExamDialog
+    v-model="showExamDialog"
+    :exam-items="selectedExamItems"
+    @finish-exam="handleExamFinish"
+  />
 </template>
 
 <style scoped>

@@ -31,6 +31,7 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     Exam: typeof import('./src/components/Exam.vue')['default']
     ExamDialog: typeof import('./src/components/ExamDialog.vue')['default']
+    GradingDialog: typeof import('./src/components/GradingDialog.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     History: typeof import('./src/components/History.vue')['default']
     Members: typeof import('./src/components/Members.vue')['default']

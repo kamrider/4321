@@ -66,10 +66,26 @@
             >
               删除
             </el-button>
+            <el-button 
+              v-if="row.status === 'completed' && row.isGrading"
+              type="success" 
+              size="small" 
+              @click="startGrading(row)"
+            >
+              开始评卷
+            </el-button>
           </el-button-group>
         </template>
       </el-table-column>
     </el-table>
+    
+    <!-- 评分对话框 -->
+    <GradingDialog
+      v-if="currentGradingExam"
+      v-model="showGradingDialog"
+      :exam="currentGradingExam"
+      @finish-grading="handleFinishGrading"
+    />
   </div>
 </template>
 
@@ -77,9 +93,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExamRecord, ExamStatus } from '../../electron/main/types'
+import GradingDialog from './GradingDialog.vue'
 
 const examList = ref<ExamRecord[]>([])
 const loading = ref(false)
+const showGradingDialog = ref(false)
+const currentGradingExam = ref<ExamRecord | null>(null)
 
 // 获取进度百分比
 const getProgress = (exam: ExamRecord) => {
@@ -130,7 +149,8 @@ const getStatusType = (status: ExamStatus) => {
     ongoing: 'warning',    // 黄色，表示进行中
     completed: 'success',  // 绿色，表示已完成
     abandoned: 'danger',   // 红色，表示已放弃
-    paused: 'info'        // 蓝色，表示已暂停
+    paused: 'info',        // 蓝色，表示已暂停
+    grading: 'warning'     // 黄色，表示评分中
   }
   return types[status]
 }
@@ -141,7 +161,8 @@ const getStatusText = (status: ExamStatus) => {
     ongoing: '进行中',
     completed: '已完成',
     abandoned: '已放弃',
-    paused: '已暂停'
+    paused: '已暂停',
+    grading: '评分中'
   }
   return texts[status]
 }
@@ -176,6 +197,17 @@ const getCompletedCount = (exam: ExamRecord) => {
   return exam.items.filter(item => 
     item.status === 'completed' || item.status === 'graded'
   ).length
+}
+
+// 开始评卷
+const startGrading = (exam: ExamRecord) => {
+  currentGradingExam.value = exam
+  showGradingDialog.value = true
+}
+
+// 完成评卷
+const handleFinishGrading = () => {
+  fetchExamList()
 }
 
 onMounted(() => {

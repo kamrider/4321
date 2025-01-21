@@ -85,6 +85,7 @@ const grade = async (isCorrect: boolean) => {
       } else {
         // 评分完成
         await window.ipcRenderer.exam.update(props.exam.id, {
+          status: 'graded',
           isGrading: false,
           gradingIndex: undefined
         })

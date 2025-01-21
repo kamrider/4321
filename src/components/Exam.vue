@@ -147,10 +147,10 @@ const fetchExamList = async () => {
 const getStatusType = (status: ExamStatus) => {
   const types = {
     ongoing: 'warning',    // 黄色，表示进行中
-    completed: 'success',  // 绿色，表示已完成
+    completed: 'warning',  // 黄色，表示待评分
+    graded: 'success',    // 绿色，表示已评分完成
     abandoned: 'danger',   // 红色，表示已放弃
-    paused: 'info',        // 蓝色，表示已暂停
-    grading: 'warning'     // 黄色，表示评分中
+    paused: 'info'        // 蓝色，表示已暂停
   }
   return types[status]
 }
@@ -159,10 +159,10 @@ const getStatusType = (status: ExamStatus) => {
 const getStatusText = (status: ExamStatus) => {
   const texts = {
     ongoing: '进行中',
-    completed: '已完成',
+    completed: '待评分',
+    graded: '已完成',
     abandoned: '已放弃',
-    paused: '已暂停',
-    grading: '评分中'
+    paused: '已暂停'
   }
   return texts[status]
 }

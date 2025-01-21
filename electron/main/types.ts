@@ -61,7 +61,7 @@ interface ExamRecord {
   gradingIndex?: number       // 当前评分的题目索引
 }
 
-type ExamStatus = 'ongoing' | 'paused' | 'completed' | 'abandoned'
+type ExamStatus = 'ongoing' | 'paused' | 'completed' | 'abandoned' | 'graded'
 
 interface ExamItem {
   fileId: string              

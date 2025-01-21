@@ -70,23 +70,33 @@ const finishExam = async () => {
   if (!examId.value) return
   
   try {
+    // 先处理最后一题
+    const timeLimit = currentItem.value?.metadata?.answerTimeLimit || 30
+    const timeSpent = timeLimit - time.value / 100
+    
+    await window.ipcRenderer.exam.updateItem(examId.value, currentIndex.value, {
+      timeSpent: timeSpent,
+      status: 'completed',
+      answeredAt: new Date().toISOString(),
+      answer: showAnswer.value
+    })
+
     const result = await window.ipcRenderer.exam.complete(examId.value)
     if (result.success) {
       ElMessage.success('考试完成')
       dialogVisible.value = false
-      emit('finish-exam', [])  // TODO: 返回实际的考试结果
+      emit('finish-exam', [])
     }
   } catch (error) {
     ElMessage.error('完成考试失败')
   }
 }
 
-// 计时器相关逻辑
+// 修改计时器相关逻辑
 const startTimer = () => {
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
   }
-  // 使用当前题目的 answerTimeLimit，转换为 10ms 单位
   const timeLimit = currentItem.value?.metadata?.answerTimeLimit || 30
   time.value = timeLimit * 100  // 转换为 10ms 单位
   
@@ -94,8 +104,34 @@ const startTimer = () => {
     if (time.value > 0) {
       time.value--
     } else {
-      // 时间到，自动提交"没记住"
-      submitAnswer(false)
+      // 时间到，自动记录最大用时并进入下一题
+      if (currentIndex.value < props.examItems.length - 1) {
+        // 记录当前题目的用时和状态
+        window.ipcRenderer.exam.updateItem(examId.value, currentIndex.value, {
+          timeSpent: timeLimit,  // 使用最大时间
+          status: 'completed',
+          answeredAt: new Date().toISOString(),
+          answer: showAnswer.value
+        }).then(() => {
+          currentIndex.value++
+          showAnswer.value = false
+          startTimer()
+        })
+      } else {
+        // 最后一题时间到，记录最大用时并完成考试
+        window.ipcRenderer.exam.updateItem(examId.value, currentIndex.value, {
+          timeSpent: timeLimit,  // 使用最大时间
+          status: 'completed',
+          answeredAt: new Date().toISOString(),
+          answer: showAnswer.value
+        }).then(() => {
+          finishExam()
+        })
+      }
+      
+      if (timerInterval.value) {
+        clearInterval(timerInterval.value)
+      }
     }
   }, 10)
 }
@@ -103,15 +139,20 @@ const startTimer = () => {
 // 手动下一题
 const nextQuestion = async () => {
   if (currentIndex.value < props.examItems.length - 1) {
-    // 记录当前题目的用时
-    await window.electron.exam.updateItem(examId.value, currentIndex.value, {
-      timeSpent: time.value / 100, // 转换为秒
-      status: 'completed'
+    const timeLimit = currentItem.value?.metadata?.answerTimeLimit || 30
+    const timeSpent = timeLimit - time.value / 100  // 正确计算实际用时
+    
+    // 记录当前题目的用时和状态
+    await window.ipcRenderer.exam.updateItem(examId.value, currentIndex.value, {
+      timeSpent: timeSpent,
+      status: 'completed',
+      answeredAt: new Date().toISOString(),
+      answer: showAnswer.value
     })
     
     currentIndex.value++
     showAnswer.value = false
-    startTimer() // 重新开始计时
+    startTimer()
   }
 }
 

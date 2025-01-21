@@ -144,10 +144,30 @@ export class ExamManager {
       const exam = await this.getExam(examId)
       if (!exam) return false
       
+      // 先删除进行中的文件
+      const ongoingPath = path.join(this.examsDir, 'ongoing', `${examId}.json`)
+      if (fs.existsSync(ongoingPath)) {
+        await fs.promises.unlink(ongoingPath)
+      }
+      
+      // 更新所有未完成题目的状态
+      exam.items = exam.items.map(item => ({
+        ...item,
+        status: item.status === 'pending' ? 'completed' : item.status,
+        timeSpent: item.status === 'pending' ? 0 : item.timeSpent,
+        answeredAt: item.status === 'pending' ? new Date().toISOString() : item.answeredAt
+      }))
+      
+      // 计算总用时（所有题目的实际用时之和）
+      const totalTimeSpent = exam.items.reduce((total, item) => total + (item.timeSpent || 0), 0)
+      
+      // 更新考试状态
       exam.status = 'completed'
       exam.endTime = new Date().toISOString()
       exam.isGrading = true
       exam.gradingIndex = 0
+      exam.currentIndex = exam.items.length
+      exam.usedTime = totalTimeSpent  // 使用正确计算的总用时
       
       await this.saveExam(exam)
       return true

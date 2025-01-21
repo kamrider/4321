@@ -82,7 +82,7 @@
     <!-- 评分对话框 -->
     <GradingDialog
       v-if="currentGradingExam"
-      v-model="showGradingDialog"
+      v-model:visible="showGradingDialog"
       :exam="currentGradingExam"
       @finish-grading="handleFinishGrading"
     />

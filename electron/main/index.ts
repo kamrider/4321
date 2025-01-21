@@ -249,12 +249,9 @@ async function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
-      // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
-      // nodeIntegration: true,
-
-      // Consider using contextBridge.exposeInMainWorld
-      // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
-      // contextIsolation: false,
+      nodeIntegration: true,
+      contextIsolation: true,
+      webSecurity: false  // 允许加载本地资源
     },
   })
 
@@ -1365,6 +1362,25 @@ ipcMain.handle('user:select', async (_, userId: string) => {
     return {
       success: false,
       error: error.message || '选择用户失败'
+    }
+  }
+})
+
+// 添加图片 URL 处理器
+ipcMain.handle('image:get-url', async (event, filename: string) => {
+  try {
+    // 修改路径构建，确保只有一个 files 目录
+    const filePath = path.join(examManager.memberDir, filename)  // 移除额外的 'files'
+    
+    // 返回带有 file:// 协议的路径
+    return {
+      success: true,
+      data: `file://${filePath}`
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: '获取图片路径失败'
     }
   }
 })

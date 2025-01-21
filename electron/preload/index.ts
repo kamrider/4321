@@ -181,6 +181,16 @@ export interface ExamItem {
 }
 
 // --------- Expose some API to the Renderer process ---------
+contextBridge.exposeInMainWorld('electron', {
+  images: {
+    // 提供一个简单的方法来获取图片 URL
+    getImageUrl: async (filename: string) => {
+      // 通过 IPC 让主进程帮我们处理路径
+      return await ipcRenderer.invoke('image:get-url', filename)
+    }
+  }
+})
+
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
@@ -371,7 +381,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
         return { success: false, error: '无效的考试ID' }
       }
       return await ipcRenderer.invoke('exam:delete', examId)
-    }
+    },
+
+    getPreviewPath: (path: string) => ipcRenderer.invoke('image:get-url', path)
   }
 })
 

@@ -1011,14 +1011,19 @@ const startExam = () => {
         </el-button>
       </div>
       
-      <div class="answer-control" v-if="activeItem.metadata?.isPaired">
+      <div class="answer-control">
         <el-button 
           type="primary" 
           @click="toggleAnswer"
           :icon="showAnswer ? 'Hide' : 'View'"
           :disabled="showAnswer"
         >
-          {{ showAnswer ? '已完成' : '完成并显示答案' }}
+          <template v-if="activeItem.metadata?.isPaired">
+            {{ showAnswer ? '已完成' : '完成并显示答案' }}
+          </template>
+          <template v-else>
+            {{ showAnswer ? '已完成' : '完成' }}
+          </template>
         </el-button>
       </div>
       

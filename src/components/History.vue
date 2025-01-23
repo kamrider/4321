@@ -91,19 +91,43 @@ const loadTimerState = (fileId: string) => {
 // 添加切换处理函数
 const handlePrevious = () => {
   if (currentIndex.value > 0) {
-    saveCurrentTimerState()
+    if (activeItem.value) {
+      saveCurrentTimerState()
+    }
     currentIndex.value--
     activeItem.value = sortedHistoryList.value[currentIndex.value]
     loadTimerState(activeItem.value.fileId)
+    
+    // 重置状态
+    showAnswer.value = false
+    showAnswerButtons.value = false
+    
+    // 重新初始化倒计时
+    if (activeItem.value.metadata?.answerTimeLimit) {
+      countdown.value = activeItem.value.metadata.answerTimeLimit
+      startCountdown()
+    }
   }
 }
 
 const handleNext = () => {
   if (currentIndex.value < sortedHistoryList.value.length - 1) {
-    saveCurrentTimerState()
+    if (activeItem.value) {
+      saveCurrentTimerState()
+    }
     currentIndex.value++
     activeItem.value = sortedHistoryList.value[currentIndex.value]
     loadTimerState(activeItem.value.fileId)
+    
+    // 重置状态
+    showAnswer.value = false
+    showAnswerButtons.value = false
+    
+    // 重新初始化倒计时
+    if (activeItem.value.metadata?.answerTimeLimit) {
+      countdown.value = activeItem.value.metadata.answerTimeLimit
+      startCountdown()
+    }
   }
 }
 
@@ -353,17 +377,42 @@ const toggleAnswer = async () => {
     
     // 只有在倒计时内完成或继续做的情况下才更新时限
     if (isCountdownRunning.value || time.value > 0) {
+      // 计算新的答题时限
+      let newTimeLimit = usedTime
+      const minutes = usedTime / 60 // 转换为分钟
+
+      // 根据完成时间动态调整下一次的时限
+      if (minutes <= 1) {
+        newTimeLimit = Math.max(30, usedTime - 5) // 减5秒，但不少于30秒
+      } else if (minutes <= 2) {
+        newTimeLimit = Math.max(30, usedTime - 10) // 减10秒
+      } else if (minutes <= 5) {
+        newTimeLimit = Math.max(30, usedTime - 20) // 减20秒
+      } else if (minutes <= 7) {
+        newTimeLimit = Math.max(30, usedTime - 40) // 减40秒
+      } else if (minutes <= 10) {
+        newTimeLimit = Math.max(30, usedTime - 60) // 减1分钟
+      } else if (minutes <= 15) {
+        newTimeLimit = Math.max(30, usedTime - 90) // 减1.5分钟
+      }
+
       try {
         const result = await window.ipcRenderer.metadata.updateDetails(
           activeItem.value!.fileId,
-          usedTime
+          newTimeLimit
         )
         
         if (result.success) {
           if (activeItem.value?.metadata) {
-            activeItem.value.metadata.answerTimeLimit = usedTime
+            activeItem.value.metadata.answerTimeLimit = newTimeLimit
           }
-          ElMessage.success(`答题时限已更新为 ${usedTime} 秒`)
+          // 显示调整后的时限
+          const adjustment = usedTime - newTimeLimit
+          if (adjustment > 0) {
+            ElMessage.success(`本次用时 ${usedTime} 秒，下次时限调整为 ${newTimeLimit} 秒（减少 ${adjustment} 秒）`)
+          } else {
+            ElMessage.success(`答题时限已更新为 ${newTimeLimit} 秒`)
+          }
         }
       } catch (error) {
         console.error('更新答题时限失败:', error)
@@ -927,8 +976,9 @@ onMounted(async () => {
           type="primary" 
           @click="toggleAnswer"
           :icon="showAnswer ? 'Hide' : 'View'"
+          :disabled="showAnswer"
         >
-          {{ showAnswer ? '隐藏答案' : '完成并显示答案' }}
+          {{ showAnswer ? '已完成' : '完成并显示答案' }}
         </el-button>
       </div>
       

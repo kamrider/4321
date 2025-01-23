@@ -39,6 +39,9 @@ const selectedItem = ref<HistoryItem | null>(null)
 const isExamMode = ref(false)
 const selectedExamItems = ref<HistoryItem[]>([])
 
+// 在其他 ref 变量声明后添加
+const showAnswerButtons = ref(false)
+
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
   return selectedExamItems.value.reduce((total, item) => {
@@ -312,11 +315,15 @@ const handleCloseDialog = () => {
   activeItem.value = null
   time.value = 0
   showAnswer.value = false
+  showAnswerButtons.value = false  // 重置按钮显示状态
 }
 
 // 添加切换答案显示的函数
 const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
+  if (showAnswer.value) {
+    showAnswerButtons.value = true
+  }
 }
 
 // 添加导出函数
@@ -730,8 +737,9 @@ const cancelExamMode = () => {
 
       <!-- 主要内容区域 -->
       <div class="mistake-section">
-        <!-- 左侧按钮 -->
+        <!-- 修改按钮的显示条件 -->
         <el-button 
+          v-if="showAnswerButtons"
           class="side-button left-button"
           type="success" 
           size="large"
@@ -750,8 +758,9 @@ const cancelExamMode = () => {
           class="detail-image"
         />
 
-        <!-- 右侧按钮 -->
+        <!-- 修改按钮的显示条件 -->
         <el-button 
+          v-if="showAnswerButtons"
           class="side-button right-button"
           type="danger" 
           size="large"
@@ -769,7 +778,7 @@ const cancelExamMode = () => {
           @click="toggleAnswer"
           :icon="showAnswer ? 'Hide' : 'View'"
         >
-          {{ showAnswer ? '隐藏答案' : '查看答案' }}
+          {{ showAnswer ? '隐藏答案' : '完成并显示答案' }}
         </el-button>
       </div>
       

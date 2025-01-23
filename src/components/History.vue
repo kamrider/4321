@@ -787,7 +787,7 @@ onMounted(async () => {
             @click="toggleExamMode"
             :class="{ 'is-active': isExamMode }"
           >
-            {{ isExamMode ? '退出考试模式' : '进入考试模式' }}你多少？
+            {{ isExamMode ? '退出考试模式' : '进入考试模式' }}
           </el-button>
           
           <template v-if="isExamMode">

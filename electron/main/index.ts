@@ -1257,3 +1257,19 @@ ipcMain.handle('file:delete', async (event, fileId: string) => {
     }
   }
 })
+
+// 更新元数据细节
+ipcMain.handle('metadata:update-details', async (_, fileId: string, answerTimeLimit: number) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    if (metadata.files[fileId]) {
+      metadata.files[fileId].answerTimeLimit = answerTimeLimit
+      await metadataManager.saveMetadata(metadata)
+      return { success: true }
+    }
+    return { success: false, error: '文件不存在' }
+  } catch (error) {
+    console.error('更新答题时限失败:', error)
+    return { success: false, error: '更新答题时限失败' }
+  }
+})

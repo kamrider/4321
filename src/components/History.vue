@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
 
 const historyList = ref<HistoryItem[]>([])
@@ -46,6 +46,15 @@ const showAnswerButtons = ref(false)
 const countdown = ref<number>(0)  // 倒计时剩余时间（秒）
 const countdownInterval = ref<number | null>(null)  // 倒计时定时器
 const isCountdownRunning = ref(false)  // 倒计时状态
+
+// 添加编辑状态
+const isEditing = ref(false)
+const editingMetadata = ref({
+  answerTimeLimit: 300,
+  subject: '',
+  tags: [] as string[]
+})
+const existingTags = ref<string[]>([])
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -332,10 +341,35 @@ const handleCloseDialog = () => {
 }
 
 // 添加切换答案显示的函数
-const toggleAnswer = () => {
+const toggleAnswer = async () => {
   showAnswer.value = !showAnswer.value
+  
+  // 只在显示答案时执行以下逻辑
   if (showAnswer.value) {
     showAnswerButtons.value = true
+    
+    // 使用实际计时器的时间来计算
+    const usedTime = Math.ceil(time.value / 100) // 因为time是以10ms为单位的
+    
+    // 只有在倒计时内完成或继续做的情况下才更新时限
+    if (isCountdownRunning.value || time.value > 0) {
+      try {
+        const result = await window.ipcRenderer.metadata.updateDetails(
+          activeItem.value!.fileId,
+          usedTime
+        )
+        
+        if (result.success) {
+          if (activeItem.value?.metadata) {
+            activeItem.value.metadata.answerTimeLimit = usedTime
+          }
+          ElMessage.success(`答题时限已更新为 ${usedTime} 秒`)
+        }
+      } catch (error) {
+        console.error('更新答题时限失败:', error)
+      }
+    }
+    stopCountdown()
   }
 }
 
@@ -537,6 +571,8 @@ watch(time, (newValue) => {
 const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
   event.preventDefault()
   selectedItem.value = item
+  isEditing.value = false // 默认为查看模式
+  initEditingMetadata(item)
   metadataDialogVisible.value = true
 }
 
@@ -577,10 +613,26 @@ const startCountdown = () => {
     if (countdown.value > 0) {
       countdown.value--
     } else {
-      // 时间到，自动显示答案
-      if (!showAnswer.value) {
-        toggleAnswer()
-      }
+      // 时间到，显示选择弹窗
+      ElMessageBox.confirm(
+        '时间到！你要继续做还是直接查看答案？',
+        '提示',
+        {
+          confirmButtonText: '继续做',
+          cancelButtonText: '直接看答案',
+          type: 'warning',
+        }
+      )
+        .then(() => {
+          // 用户选择继续做
+          // 继续计时，不显示答案
+          startTimer()
+        })
+        .catch(() => {
+          // 用户选择直接看答案
+          showAnswer.value = true
+          showAnswerButtons.value = true
+        })
       stopCountdown()
     }
   }, 1000)
@@ -600,6 +652,52 @@ const formattedCountdown = computed(() => {
   const minutes = Math.floor(countdown.value / 60)
   const seconds = countdown.value % 60
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+})
+
+// 初始化编辑数据
+const initEditingMetadata = (item: HistoryItem) => {
+  editingMetadata.value = {
+    answerTimeLimit: item.metadata?.answerTimeLimit || 300,
+    subject: item.metadata?.subject || '',
+    tags: [...(item.metadata?.tags || [])]
+  }
+}
+
+// 保存元数据
+const handleSaveMetadata = async () => {
+  if (!selectedItem.value) return
+  
+  try {
+    const result = await window.ipcRenderer.metadata.updateDetails(
+      selectedItem.value.fileId,
+      editingMetadata.value.answerTimeLimit
+    )
+    
+    if (result.success) {
+      if (selectedItem.value.metadata) {
+        selectedItem.value.metadata.answerTimeLimit = editingMetadata.value.answerTimeLimit
+      }
+      ElMessage.success('更新成功')
+      isEditing.value = false
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('更新失败:', error)
+    ElMessage.error('更新失败')
+  }
+}
+
+// 获取所有已存在的标签
+onMounted(async () => {
+  try {
+    const result = await window.ipcRenderer.metadata.getAllTags()
+    if (result.success) {
+      existingTags.value = result.data
+    }
+  } catch (error) {
+    console.error('获取标签失败:', error)
+  }
 })
 </script>
 
@@ -640,7 +738,7 @@ const formattedCountdown = computed(() => {
             @click="toggleExamMode"
             :class="{ 'is-active': isExamMode }"
           >
-            {{ isExamMode ? '退出考试模式' : '进入考试模式' }}
+            {{ isExamMode ? '退出考试模式' : '进入考试模式' }}你多少？
           </el-button>
           
           <template v-if="isExamMode">
@@ -868,7 +966,17 @@ const formattedCountdown = computed(() => {
     width="500px"
   >
     <div v-if="selectedItem" class="metadata-content">
-      <el-descriptions :column="1" border>
+      <!-- 添加编辑/查看切换按钮 -->
+      <div class="dialog-header">
+        <el-switch
+          v-model="isEditing"
+          active-text="编辑模式"
+          inactive-text="查看模式"
+        />
+      </div>
+
+      <!-- 查看模式 -->
+      <el-descriptions v-if="!isEditing" :column="1" border>
         <el-descriptions-item label="熟练度">
           {{ selectedItem.metadata.proficiency }}
         </el-descriptions-item>
@@ -898,7 +1006,63 @@ const formattedCountdown = computed(() => {
           </el-tag>
         </el-descriptions-item>
       </el-descriptions>
+
+      <!-- 编辑模式 -->
+      <el-form 
+        v-else
+        :model="editingMetadata"
+        label-width="100px"
+        class="edit-form"
+      >
+        <el-form-item label="答题时限">
+          <el-input
+            v-model.number="editingMetadata.answerTimeLimit"
+            type="number"
+            :min="30"
+            :max="600"
+            placeholder="请输入答题时限(秒)"
+          >
+            <template #append>秒</template>
+          </el-input>
+        </el-form-item>
+        
+        <el-form-item label="科目">
+          <el-input v-model="editingMetadata.subject" />
+        </el-form-item>
+        
+        <el-form-item label="标签">
+          <el-select
+            v-model="editingMetadata.tags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="请输入或选择标签"
+          >
+            <el-option
+              v-for="tag in existingTags"
+              :key="tag"
+              :label="tag"
+              :value="tag"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
     </div>
+
+    <!-- 添加底部按钮 -->
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="metadataDialogVisible = false">关闭</el-button>
+        <el-button 
+          v-if="isEditing"
+          type="primary" 
+          @click="handleSaveMetadata"
+        >
+          保存
+        </el-button>
+      </span>
+    </template>
   </el-dialog>
 </template>
 
@@ -1335,5 +1499,21 @@ const formattedCountdown = computed(() => {
   justify-content: center;
   align-items: center;
   gap: 20px;
+}
+
+.dialog-header {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.edit-form {
+  padding: 20px;
 }
 </style> 

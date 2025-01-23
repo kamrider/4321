@@ -232,7 +232,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       ipcRenderer.invoke('metadata:pair-images', fileId1, fileId2),
     // 添加解绑方法
     unpairImages: (fileId1: string, fileId2: string) => 
-      ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2)
+      ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2),
+    // 添加 updateDetails 方法
+    updateDetails: (fileId: string, answerTimeLimit: number) => 
+      ipcRenderer.invoke('metadata:update-details', fileId, answerTimeLimit)
   },
 
   mistake: {

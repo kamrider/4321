@@ -42,6 +42,11 @@ const selectedExamItems = ref<HistoryItem[]>([])
 // 在其他 ref 变量声明后添加
 const showAnswerButtons = ref(false)
 
+// 在现有的响应式变量声明后添加
+const countdown = ref<number>(0)  // 倒计时剩余时间（秒）
+const countdownInterval = ref<number | null>(null)  // 倒计时定时器
+const isCountdownRunning = ref(false)  // 倒计时状态
+
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
   return selectedExamItems.value.reduce((total, item) => {
@@ -300,6 +305,13 @@ const handleViewDetail = (item: HistoryItem) => {
   loadTimerState(item.fileId)
   dialogVisible.value = true
   showAnswer.value = false
+  showAnswerButtons.value = false
+  
+  // 初始化倒计时
+  if (item.metadata?.answerTimeLimit) {
+    countdown.value = item.metadata.answerTimeLimit
+    startCountdown()
+  }
 }
 
 // 修改关闭弹窗处理函数
@@ -315,7 +327,8 @@ const handleCloseDialog = () => {
   activeItem.value = null
   time.value = 0
   showAnswer.value = false
-  showAnswerButtons.value = false  // 重置按钮显示状态
+  showAnswerButtons.value = false
+  stopCountdown()  // 添加这行
 }
 
 // 添加切换答案显示的函数
@@ -552,6 +565,42 @@ const cancelExamMode = () => {
   isExamMode.value = false
   selectedExamItems.value = []
 }
+
+// 开始倒计时
+const startCountdown = () => {
+  if (countdownInterval.value) {
+    clearInterval(countdownInterval.value)
+  }
+  
+  isCountdownRunning.value = true
+  countdownInterval.value = setInterval(() => {
+    if (countdown.value > 0) {
+      countdown.value--
+    } else {
+      // 时间到，自动显示答案
+      if (!showAnswer.value) {
+        toggleAnswer()
+      }
+      stopCountdown()
+    }
+  }, 1000)
+}
+
+// 停止倒计时
+const stopCountdown = () => {
+  if (countdownInterval.value) {
+    clearInterval(countdownInterval.value)
+    countdownInterval.value = null
+  }
+  isCountdownRunning.value = false
+}
+
+// 格式化倒计时显示
+const formattedCountdown = computed(() => {
+  const minutes = Math.floor(countdown.value / 60)
+  const seconds = countdown.value % 60
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+})
 </script>
 
 <template>
@@ -718,6 +767,9 @@ const cancelExamMode = () => {
 
       <!-- 保持原有的计时器显示 -->
       <div class="timer-container">
+        <div class="countdown-display" v-if="isCountdownRunning">
+          剩余时间：{{ formattedCountdown }}
+        </div>
         <div class="timer-display" 
              :style="{ 
                color: currentTimeColor.color,
@@ -1267,5 +1319,21 @@ const cancelExamMode = () => {
   border: 2px solid var(--el-color-primary);
   transform: scale(1.02);
   box-shadow: 0 0 10px rgba(var(--el-color-primary-rgb), 0.3);
+}
+
+.countdown-display {
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  color: var(--el-color-danger);
+  margin-right: 20px;
+  font-weight: bold;
+}
+
+.timer-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
 }
 </style> 

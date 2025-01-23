@@ -38,6 +38,8 @@ const selectedItem = ref<HistoryItem | null>(null)
 // 考试模式相关的状态
 const isExamMode = ref(false)
 const selectedExamItems = ref<HistoryItem[]>([])
+const currentExamIndex = ref(0)
+const isInExam = ref(false)
 
 // 在其他 ref 变量声明后添加
 const showAnswerButtons = ref(false)
@@ -90,43 +92,57 @@ const loadTimerState = (fileId: string) => {
 
 // 添加切换处理函数
 const handlePrevious = () => {
-  if (currentIndex.value > 0) {
-    if (activeItem.value) {
-      saveCurrentTimerState()
+  if (isInExam.value) {
+    if (currentExamIndex.value > 0) {
+      currentExamIndex.value--
+      handleViewDetail(selectedExamItems.value[currentExamIndex.value])
     }
-    currentIndex.value--
-    activeItem.value = sortedHistoryList.value[currentIndex.value]
-    loadTimerState(activeItem.value.fileId)
-    
-    // 重置状态
-    showAnswer.value = false
-    showAnswerButtons.value = false
-    
-    // 重新初始化倒计时
-    if (activeItem.value.metadata?.answerTimeLimit) {
-      countdown.value = activeItem.value.metadata.answerTimeLimit
-      startCountdown()
+  } else {
+    if (currentIndex.value > 0) {
+      if (activeItem.value) {
+        saveCurrentTimerState()
+      }
+      currentIndex.value--
+      activeItem.value = sortedHistoryList.value[currentIndex.value]
+      loadTimerState(activeItem.value.fileId)
+      
+      // 重置状态
+      showAnswer.value = false
+      showAnswerButtons.value = false
+      
+      // 重新初始化倒计时
+      if (activeItem.value.metadata?.answerTimeLimit) {
+        countdown.value = activeItem.value.metadata.answerTimeLimit
+        startCountdown()
+      }
     }
   }
 }
 
 const handleNext = () => {
-  if (currentIndex.value < sortedHistoryList.value.length - 1) {
-    if (activeItem.value) {
-      saveCurrentTimerState()
+  if (isInExam.value) {
+    if (currentExamIndex.value < selectedExamItems.value.length - 1) {
+      currentExamIndex.value++
+      handleViewDetail(selectedExamItems.value[currentExamIndex.value])
     }
-    currentIndex.value++
-    activeItem.value = sortedHistoryList.value[currentIndex.value]
-    loadTimerState(activeItem.value.fileId)
-    
-    // 重置状态
-    showAnswer.value = false
-    showAnswerButtons.value = false
-    
-    // 重新初始化倒计时
-    if (activeItem.value.metadata?.answerTimeLimit) {
-      countdown.value = activeItem.value.metadata.answerTimeLimit
-      startCountdown()
+  } else {
+    if (currentIndex.value < sortedHistoryList.value.length - 1) {
+      if (activeItem.value) {
+        saveCurrentTimerState()
+      }
+      currentIndex.value++
+      activeItem.value = sortedHistoryList.value[currentIndex.value]
+      loadTimerState(activeItem.value.fileId)
+      
+      // 重置状态
+      showAnswer.value = false
+      showAnswerButtons.value = false
+      
+      // 重新初始化倒计时
+      if (activeItem.value.metadata?.answerTimeLimit) {
+        countdown.value = activeItem.value.metadata.answerTimeLimit
+        startCountdown()
+      }
     }
   }
 }
@@ -505,8 +521,21 @@ const submitTraining = async (fileId: string, success: boolean) => {
         }
       }
       ElMessage.success('训练记录已保存')
-      // 移除关闭对话框的代码
-      // dialogVisible.value = false
+      // 如果在考试模式中，自动跳转到下一题
+      if (isInExam.value) {
+        currentExamIndex.value++
+        if (currentExamIndex.value < selectedExamItems.value.length) {
+          // 还有下一题，自动跳转
+          handleViewDetail(selectedExamItems.value[currentExamIndex.value])
+        } else {
+          // 考试完成
+          isInExam.value = false
+          isExamMode.value = false
+          selectedExamItems.value = []
+          ElMessage.success('考试已完成！')
+          handleCloseDialog()
+        }
+      }
     } else {
       throw new Error(result.error)
     }
@@ -748,6 +777,17 @@ onMounted(async () => {
     console.error('获取标签失败:', error)
   }
 })
+
+// 开始考试
+const startExam = () => {
+  if (selectedExamItems.value.length === 0) return
+  
+  isInExam.value = true
+  currentExamIndex.value = 0
+  
+  // 打开第一道题的详情
+  handleViewDetail(selectedExamItems.value[0])
+}
 </script>
 
 <template>

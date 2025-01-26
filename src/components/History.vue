@@ -442,7 +442,10 @@ const toggleAnswer = async () => {
 const exportHistory = async () => {
   try {
     loading.value = true
-    const result = await window.ipcRenderer.file.exportTrainingHistory()
+    const result = await window.ipcRenderer.file.exportTrainingHistory(
+      sortType.value,
+      sortOrder.value
+    )
     if (result.success) {
       ElMessage.success(`成功导出到: ${result.data.exportDir}`)
     } else {

@@ -1104,9 +1104,8 @@ ipcMain.handle('file:export', async (event, filePaths: string[]) => {
 })
 
 // 添加导出训练历史的处理函数
-ipcMain.handle('file:export-training-history', async () => {
+ipcMain.handle('file:export-training-history', async (_, sortType = 'time', sortOrder = 'desc') => {
   try {
-    // 让用户选择导出目录
     const result = await dialog.showOpenDialog({
       title: '选择导出目录',
       properties: ['openDirectory']
@@ -1117,86 +1116,119 @@ ipcMain.handle('file:export-training-history', async () => {
     }
 
     const exportDir = result.filePaths[0]
-
     const metadata = await metadataManager.getMetadata()
     const allFiles = Object.entries(metadata.files)
     const currentDir = path.join(metadataManager.getCurrentMemberDir())
     
-    // 创建导出数据
-    const exportData = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
+    // 分别存储错题和答案
+    const mistakeData = []
+    const answerData = []
+    
+    // 收集数据并筛选需要训练的错题
     for (const [id, file] of allFiles) {
-      // 筛选条件：只处理错题类型的文件，且今天需要训练或已经逾期的
-      if (file.type !== 'mistake') continue
-
-      const nextTrainingDate = new Date(file.nextTrainingDate)
-      nextTrainingDate.setHours(0, 0, 0, 0)
-
-      if (nextTrainingDate <= today) {
+      if (file.type === 'mistake') {
+        // 检查是否需要训练
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const nextTrainingDate = new Date(file.nextTrainingDate)
+        nextTrainingDate.setHours(0, 0, 0, 0)
+        
+        // 只添加今天需要训练或已经逾期的错题
+        if (nextTrainingDate <= today) {
+          const filePath = path.join(currentDir, file.relativePath)
+          mistakeData.push({
+            id,
+            filePath,
+            pairId: file.pairId,
+            uploadDate: file.uploadDate,
+            proficiency: file.proficiency || 0
+          })
+        }
+      } else if (file.type === 'answer') {
         const filePath = path.join(currentDir, file.relativePath)
-        exportData.push({
+        answerData.push({
           id,
-          originalFileName: file.originalFileName,
-          uploadDate: file.uploadDate,
-          proficiency: file.proficiency,
-          trainingInterval: file.trainingInterval,
-          lastTrainingDate: file.lastTrainingDate,
-          nextTrainingDate: file.nextTrainingDate,
-          trainingRecords: file.trainingRecords,
-          subject: file.subject,
-          tags: file.tags,
-          notes: file.notes,
-          filePath
+          filePath,
+          pairId: file.pairId
         })
       }
     }
 
-    if (exportData.length === 0) {
-      return {
-        success: false,
-        error: '没有可导出的训练历史'
+    // 对错题进行排序，然后反转顺序
+    mistakeData.sort((a, b) => {
+      if (sortType === 'time') {
+        const timeA = new Date(a.uploadDate).getTime()
+        const timeB = new Date(b.uploadDate).getTime()
+        return sortOrder === 'desc' ? timeB - timeA : timeA - timeB
+      } else {
+        const profA = a.proficiency
+        const profB = b.proficiency
+        return sortOrder === 'desc' ? profB - profA : profA - profB
       }
-    }
+    }).reverse()
 
-    // 创建导出目录下的子目录
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const exportSubDir = path.join(exportDir, `训练历史导出_${timestamp}`)
-    if (!fs.existsSync(exportSubDir)) {
-      fs.mkdirSync(exportSubDir, { recursive: true })
-    }
+    // 获取当前用户名和时间戳
+    const currentMember = metadataManager.getCurrentMember()
+    const now = new Date()
+    const dateStr = now.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\//g, '-')
+    const timeStr = now.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(/:/g, '-')
 
-    // 导出训练历史数据为JSON
-    const jsonPath = path.join(exportSubDir, `训练历史.json`)
-    await fs.promises.writeFile(jsonPath, JSON.stringify(exportData, null, 2), 'utf-8')
+    const exportSubDir = path.join(exportDir, `${currentMember}_${dateStr}_${timeStr}`)
+    const mistakesDir = path.join(exportSubDir, '错题')
+    const answersDir = path.join(exportSubDir, '答案')
+    
+    fs.mkdirSync(mistakesDir, { recursive: true })
+    fs.mkdirSync(answersDir, { recursive: true })
 
-    // 复制所有相关的图片文件
-    const imagesDir = path.join(exportSubDir, '图片')
-    if (!fs.existsSync(imagesDir)) {
-      fs.mkdirSync(imagesDir, { recursive: true })
-    }
+    // 按排序后的顺序处理错题
+    let mistakeIndex = 1
+    const mistakeMap = new Map()
 
-    for (const item of exportData) {
-      const targetPath = path.join(imagesDir, path.basename(item.filePath))
+    for (const item of mistakeData) {
+      const extension = path.extname(item.filePath)
+      const newFileName = `错题${mistakeIndex}${extension}`
+      const targetPath = path.join(mistakesDir, newFileName)
       await fs.promises.copyFile(item.filePath, targetPath)
+      
+      if (item.pairId) {
+        mistakeMap.set(item.pairId, {
+          index: mistakeIndex,
+          answerCount: 0
+        })
+      }
+      mistakeIndex++
+    }
+
+    // 只处理与筛选出的错题相关的答案
+    for (const item of answerData) {
+      const mistakeInfo = mistakeMap.get(item.pairId)
+      if (mistakeInfo) {
+        const extension = path.extname(item.filePath)
+        mistakeInfo.answerCount++
+        const newFileName = `答案${mistakeInfo.index}-${mistakeInfo.answerCount}${extension}`
+        const targetPath = path.join(answersDir, newFileName)
+        await fs.promises.copyFile(item.filePath, targetPath)
+      }
     }
 
     return {
       success: true,
       data: {
         exportDir: exportSubDir,
-        jsonPath,
-        imagesDir,
-        totalFiles: exportData.length
+        mistakesCount: mistakeData.length,
+        answersCount: answerData.length
       }
     }
   } catch (error) {
     console.error('导出训练历史失败:', error)
-    return {
-      success: false,
-      error: error.message
-    }
+    return { success: false, error: error.message }
   }
 })
 

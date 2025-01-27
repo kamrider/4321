@@ -113,6 +113,21 @@ interface UploadAPI {
   }>
 }
 
+// 在已有的接口定义后添加新的接口
+interface ExportMistakeParams {
+  mistake: MistakeItem
+  answer: MistakeItem | null
+  exportTime: string
+}
+
+interface ExportMistakeResult {
+  success: boolean
+  error?: string
+  data?: {
+    exportPath: string
+  }
+}
+
 export interface IpcRenderer {
   // 基础 IPC 方法
   on(channel: string, func: (...args: any[]) => void): void
@@ -142,6 +157,8 @@ export interface IpcRenderer {
       success: boolean
       error?: string
     }>
+    exportMistake: (params: ExportMistakeParams) => Promise<ExportMistakeResult>
+    getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem[]>>
   }
 }
 
@@ -283,7 +300,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   file: {
     export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
     exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history'),
-    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId)
+    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
+    exportMistake: (params: ExportMistakeParams) => 
+      ipcRenderer.invoke('file:export-mistake', params),
+    getMistakeDetails: (fileId: string) => ipcRenderer.invoke('file:get-mistake-details', fileId)
   }
 })
 
@@ -413,6 +433,24 @@ declare global {
         }>
       }
       upload: UploadAPI
+      file: {
+        export: (paths: string[]) => Promise<{
+          success: boolean
+          exportPath?: string
+          error?: string
+        }>
+        exportTrainingHistory: () => Promise<{
+          success: boolean
+          exportPath?: string
+          error?: string
+        }>
+        delete: (fileId: string) => Promise<{
+          success: boolean
+          error?: string
+        }>
+        exportMistake: (params: ExportMistakeParams) => Promise<ExportMistakeResult>
+        getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem[]>>
+      }
     }
   }
 }

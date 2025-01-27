@@ -1305,3 +1305,156 @@ ipcMain.handle('metadata:update-details', async (_, fileId: string, answerTimeLi
     return { success: false, error: '更新答题时限失败' }
   }
 })
+
+// 添加导出错题的处理函数
+ipcMain.handle('file:export-mistake', async (_, params: {
+  mistake: MistakeItem
+  answer: MistakeItem | MistakeItem[] | null
+  exportTime: string
+}) => {
+  try {
+    // 让用户选择导出目录
+    const result = await dialog.showOpenDialog({
+      title: '选择导出目录',
+      properties: ['openDirectory']
+    })
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: false, error: '未选择导出目录' }
+    }
+
+    const exportDir = result.filePaths[0]
+    const currentMember = metadataManager.getCurrentMember()
+    
+    // 创建以时间戳命名的子目录
+    const now = new Date(params.exportTime)
+    const dateStr = now.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\//g, '-')
+    
+    const timeStr = now.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(/:/g, '-')
+
+    const exportSubDir = path.join(
+      exportDir, 
+      `错题_${currentMember}_${dateStr}_${timeStr}`
+    )
+    
+    // 创建错题和答案目录
+    const mistakesDir = path.join(exportSubDir, '错题')
+    const answersDir = path.join(exportSubDir, '答案')
+    
+    fs.mkdirSync(mistakesDir, { recursive: true })
+    fs.mkdirSync(answersDir, { recursive: true })
+
+    // 复制错题文件
+    const mistakeExt = path.extname(params.mistake.path)
+    const mistakePath = path.join(mistakesDir, `错题1${mistakeExt}`)
+    await fs.promises.copyFile(params.mistake.path, mistakePath)
+
+    // 处理答案文件（可能是单个答案或多个答案）
+    if (params.answer) {
+      const answers = Array.isArray(params.answer) ? params.answer : [params.answer]
+      let answerIndex = 1
+      
+      for (const answer of answers) {
+        const answerExt = path.extname(answer.path)
+        const answerPath = path.join(answersDir, `答案${answerIndex}${answerExt}`)
+        await fs.promises.copyFile(answer.path, answerPath)
+        answerIndex++
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        exportPath: exportSubDir
+      }
+    }
+  } catch (error) {
+    console.error('导出错题失败:', error)
+    return {
+      success: false,
+      error: error.message || '导出错题失败'
+    }
+  }
+})
+
+// 添加获取错题详情的处理函数
+ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
+  try {
+    const currentDir = path.join(metadataManager.getCurrentMemberDir())
+    const metadata = await metadataManager.getMetadata()
+    const file = metadata.files[fileId]
+    
+    if (!file) {
+      return { success: false, error: '文件不存在' }
+    }
+
+    const filePath = path.join(currentDir, file.relativePath)
+    const fileData = await fs.promises.readFile(filePath)
+    const fileExtension = path.extname(filePath).toLowerCase().slice(1)
+    const base64Data = fileData.toString('base64')
+    
+    // 构建错题数据
+    const mistakeData = {
+      fileId,
+      path: filePath,
+      preview: `data:image/${fileExtension};base64,${base64Data}`,
+      uploadDate: file.uploadDate,
+      originalDate: file.originalDate,
+      originalFileName: file.originalFileName,
+      fileSize: file.fileSize,
+      lastModified: file.lastModified,
+      hash: file.hash,
+      metadata: {
+        ...file,
+        pairedWith: null
+      }
+    }
+
+    // 如果有配对的答案，获取答案信息
+    if (file.isPaired && file.pairId) {
+      const pairedAnswers = Object.entries(metadata.files)
+        .filter(([_, f]) => f.type === 'answer' && f.pairId === file.pairId)
+        .map(([id, f]) => {
+          const answerPath = path.join(currentDir, f.relativePath)
+          const answerData = fs.readFileSync(answerPath)
+          const answerExtension = path.extname(answerPath).toLowerCase().slice(1)
+          const answerBase64 = answerData.toString('base64')
+          
+          return {
+            fileId: id,
+            path: answerPath,
+            preview: `data:image/${answerExtension};base64,${answerBase64}`,
+            uploadDate: f.uploadDate,
+            originalDate: f.originalDate,
+            originalFileName: f.originalFileName,
+            fileSize: f.fileSize,
+            lastModified: f.lastModified,
+            hash: f.hash,
+            metadata: {
+              ...f,
+              pairedWith: null
+            }
+          }
+        })
+
+      if (pairedAnswers.length > 0) {
+        mistakeData.metadata.pairedWith = pairedAnswers.length === 1 ? pairedAnswers[0] : pairedAnswers
+      }
+    }
+
+    return {
+      success: true,
+      data: mistakeData
+    }
+  } catch (error) {
+    console.error('获取错题详情失败:', error)
+    return { success: false, error: error.message }
+  }
+})

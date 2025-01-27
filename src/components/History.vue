@@ -469,7 +469,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
 
-// 提交训练结果的方法
+// 修改提交训练结果的方法
 const submitTraining = async (fileId: string, success: boolean) => {
   // 停止计时
   if (timerInterval.value) {
@@ -483,7 +483,32 @@ const submitTraining = async (fileId: string, success: boolean) => {
   try {
     const result = await window.ipcRenderer.training.submitResult(fileId, success)
     if (result.success) {
-      // 提交成功后重新获取训练状态
+      // 如果答错了(success为false),则导出错题和答案
+      if (!success && activeItem.value) {
+        try {
+          // 获取当前错题的完整信息
+          const mistakeResult = await window.ipcRenderer.file.getMistakeDetails(activeItem.value.fileId)
+          if (!mistakeResult.success) {
+            throw new Error('获取错题详情失败')
+          }
+
+          // 调用导出函数
+          const exportResult = await window.ipcRenderer.file.exportMistake({
+            mistake: mistakeResult.data,
+            answer: mistakeResult.data.metadata?.pairedWith,
+            exportTime: new Date().toISOString()
+          })
+          
+          if (exportResult.success) {
+            ElMessage.success(`错题已导出到: ${exportResult.data.exportPath}`)
+          }
+        } catch (error) {
+          console.error('导出错题失败:', error)
+          ElMessage.warning('错题导出失败,但训练记录已保存')
+        }
+      }
+
+      // 原有的训练记录更新逻辑
       const nextTraining = await window.ipcRenderer.training.getNextTraining(fileId)
       if (nextTraining.success) {
         // 更新列表中对应项的训练信息

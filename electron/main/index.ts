@@ -1323,10 +1323,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
   exportTime: string
 }) => {
   try {
-    // 获取当前用户的导出基础目录
     const exportBaseDir = getExportBaseDir()
-    
-    // 获取今天的日期作为子目录
     const today = new Date()
     const dateStr = today.toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -1335,27 +1332,32 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     }).replace(/\//g, '-')
     
     const exportDir = path.join(exportBaseDir, dateStr)
-    
-    // 确保目录存在
     fs.mkdirSync(exportDir, { recursive: true })
     
-    // 创建错题和答案子目录
     const mistakesDir = path.join(exportDir, '错题')
     const answersDir = path.join(exportDir, '答案')
     
     fs.mkdirSync(mistakesDir, { recursive: true })
     fs.mkdirSync(answersDir, { recursive: true })
 
-    // 复制错题文件
-    const mistakeFileName = path.basename(params.mistake.path)
+    // 获取当前目录下已存在的错题数量，用于生成新的序号
+    const existingMistakes = fs.readdirSync(mistakesDir)
+    const mistakeNumber = existingMistakes.length + 1
+
+    // 生成错题文件名：序号 + 原始扩展名
+    const mistakeExt = path.extname(params.mistake.path)
+    const mistakeFileName = `${mistakeNumber}${mistakeExt}`
     const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
     await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
 
-    // 如果有答案，复制答案文件
+    // 如果有答案，使用对应的命名方式
     if (params.answer) {
       const answers = Array.isArray(params.answer) ? params.answer : [params.answer]
-      for (const answer of answers) {
-        const answerFileName = path.basename(answer.path)
+      for (let i = 0; i < answers.length; i++) {
+        const answer = answers[i]
+        const answerExt = path.extname(answer.path)
+        // 生成答案文件名：错题序号.答案序号 + 原始扩展名
+        const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`
         const answerTargetPath = path.join(answersDir, answerFileName)
         await fs.promises.copyFile(answer.path, answerTargetPath)
       }

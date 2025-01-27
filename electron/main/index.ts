@@ -83,6 +83,16 @@ let isCancelled = false
 // 获取存储路径，如果不存在则使用默认路径
 let targetDirectory = store.get('storagePath', DEFAULT_STORAGE_PATH)
 
+// 获取导出基础目录
+const getExportBaseDir = () => {
+  const currentMember = metadataManager.getCurrentMember()
+  return path.join(
+    targetDirectory,
+    'exports',
+    currentMember
+  )
+}
+
 // 添加临时目录配置
 const getTempDirectory = () => path.join(targetDirectory, 'temp')
 
@@ -1313,73 +1323,55 @@ ipcMain.handle('file:export-mistake', async (_, params: {
   exportTime: string
 }) => {
   try {
-    // 让用户选择导出目录
-    const result = await dialog.showOpenDialog({
-      title: '选择导出目录',
-      properties: ['openDirectory']
-    })
-
-    if (result.canceled || !result.filePaths[0]) {
-      return { success: false, error: '未选择导出目录' }
-    }
-
-    const exportDir = result.filePaths[0]
-    const currentMember = metadataManager.getCurrentMember()
+    // 获取当前用户的导出基础目录
+    const exportBaseDir = getExportBaseDir()
     
-    // 创建以时间戳命名的子目录
-    const now = new Date(params.exportTime)
-    const dateStr = now.toLocaleDateString('zh-CN', {
+    // 获取今天的日期作为子目录
+    const today = new Date()
+    const dateStr = today.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
     }).replace(/\//g, '-')
     
-    const timeStr = now.toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }).replace(/:/g, '-')
-
-    const exportSubDir = path.join(
-      exportDir, 
-      `错题_${currentMember}_${dateStr}_${timeStr}`
-    )
+    const exportDir = path.join(exportBaseDir, dateStr)
     
-    // 创建错题和答案目录
-    const mistakesDir = path.join(exportSubDir, '错题')
-    const answersDir = path.join(exportSubDir, '答案')
+    // 确保目录存在
+    fs.mkdirSync(exportDir, { recursive: true })
+    
+    // 创建错题和答案子目录
+    const mistakesDir = path.join(exportDir, '错题')
+    const answersDir = path.join(exportDir, '答案')
     
     fs.mkdirSync(mistakesDir, { recursive: true })
     fs.mkdirSync(answersDir, { recursive: true })
 
     // 复制错题文件
-    const mistakeExt = path.extname(params.mistake.path)
-    const mistakePath = path.join(mistakesDir, `错题1${mistakeExt}`)
-    await fs.promises.copyFile(params.mistake.path, mistakePath)
+    const mistakeFileName = path.basename(params.mistake.path)
+    const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
+    await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
 
-    // 处理答案文件（可能是单个答案或多个答案）
+    // 如果有答案，复制答案文件
     if (params.answer) {
       const answers = Array.isArray(params.answer) ? params.answer : [params.answer]
-      let answerIndex = 1
-      
       for (const answer of answers) {
-        const answerExt = path.extname(answer.path)
-        const answerPath = path.join(answersDir, `答案${answerIndex}${answerExt}`)
-        await fs.promises.copyFile(answer.path, answerPath)
-        answerIndex++
+        const answerFileName = path.basename(answer.path)
+        const answerTargetPath = path.join(answersDir, answerFileName)
+        await fs.promises.copyFile(answer.path, answerTargetPath)
       }
     }
 
     return {
       success: true,
       data: {
-        exportPath: exportSubDir
+        exportPath: exportDir
       }
     }
   } catch (error) {
     console.error('导出错题失败:', error)
     return {
       success: false,
-      error: error.message || '导出错题失败'
+      error: error.message
     }
   }
 })

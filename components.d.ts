@@ -30,6 +30,7 @@ declare module 'vue' {
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
+    ExportedMistakes: typeof import('./src/components/ExportedMistakes.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     History: typeof import('./src/components/History.vue')['default']
     Members: typeof import('./src/components/Members.vue')['default']

@@ -1336,9 +1336,11 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     
     const mistakesDir = path.join(exportDir, '错题')
     const answersDir = path.join(exportDir, '答案')
+    const metadataDir = path.join(exportDir, 'metadata')
     
     fs.mkdirSync(mistakesDir, { recursive: true })
     fs.mkdirSync(answersDir, { recursive: true })
+    fs.mkdirSync(metadataDir, { recursive: true })
 
     // 获取当前目录下已存在的错题数量，用于生成新的序号
     const existingMistakes = fs.readdirSync(mistakesDir)
@@ -1346,9 +1348,20 @@ ipcMain.handle('file:export-mistake', async (_, params: {
 
     // 生成错题文件名：序号 + 原始扩展名
     const mistakeExt = path.extname(params.mistake.path)
-    const mistakeFileName = `${mistakeNumber}${mistakeExt}`
+    const mistakeFileName = `错题${mistakeNumber}${mistakeExt}`
     const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
     await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
+
+    // 保存错题的元数据
+    const mistakeMetadata = {
+      originalFileId: params.mistake.fileId,
+      exportDate: today.toISOString(),
+      metadata: params.mistake.metadata
+    }
+    await fs.promises.writeFile(
+      path.join(metadataDir, `错题${mistakeNumber}.json`),
+      JSON.stringify(mistakeMetadata, null, 2)
+    )
 
     // 如果有答案，使用对应的命名方式
     if (params.answer) {
@@ -1360,6 +1373,17 @@ ipcMain.handle('file:export-mistake', async (_, params: {
         const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`
         const answerTargetPath = path.join(answersDir, answerFileName)
         await fs.promises.copyFile(answer.path, answerTargetPath)
+
+        // 保存答案的元数据
+        const answerMetadata = {
+          originalFileId: answer.fileId,
+          exportDate: today.toISOString(),
+          metadata: answer.metadata
+        }
+        await fs.promises.writeFile(
+          path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
+          JSON.stringify(answerMetadata, null, 2)
+        )
       }
     }
 
@@ -1449,6 +1473,141 @@ ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
     }
   } catch (error) {
     console.error('获取错题详情失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 添加获取导出错题记录的处理函数
+ipcMain.handle('file:get-exported-mistakes', async () => {
+  try {
+    const exportBaseDir = getExportBaseDir()
+    const result: {
+      date: string
+      path: string
+      mistakes: {
+        path: string
+        preview: string
+        originalFileId?: string
+        metadata?: any
+        answers: Array<{
+          path: string
+          preview: string
+          originalFileId?: string
+          metadata?: any
+        }>
+      }[]
+    }[] = []
+
+    // 检查导出目录是否存在
+    if (!fs.existsSync(exportBaseDir)) {
+      return { success: true, data: [] }
+    }
+
+    // 获取所有日期文件夹
+    const dateDirs = fs.readdirSync(exportBaseDir)
+    
+    for (const dateDir of dateDirs) {
+      const datePath = path.join(exportBaseDir, dateDir)
+      const mistakesDir = path.join(datePath, '错题')
+      const answersDir = path.join(datePath, '答案')
+      const metadataDir = path.join(datePath, 'metadata')
+      
+      if (!fs.existsSync(mistakesDir) || !fs.existsSync(answersDir)) {
+        continue
+      }
+
+      const mistakes = fs.readdirSync(mistakesDir)
+      const dateItem = {
+        date: dateDir,
+        path: datePath,
+        mistakes: [] as typeof result[0]['mistakes']
+      }
+
+      for (const mistake of mistakes) {
+        const mistakePath = path.join(mistakesDir, mistake)
+        const mistakeData = await fs.promises.readFile(mistakePath)
+        const mistakeExt = path.extname(mistakePath).toLowerCase().slice(1)
+        const mistakeBase64 = mistakeData.toString('base64')
+        
+        // 获取错题元数据
+        const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
+        let mistakeMetadata = null
+        try {
+          const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
+          if (fs.existsSync(metadataPath)) {
+            const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
+            mistakeMetadata = JSON.parse(metadataContent)
+          }
+        } catch (error) {
+          console.error('读取错题元数据失败:', error)
+        }
+        
+        // 获取对应的答案
+        const answerPattern = new RegExp(`^${mistakeNumber}\\.`)
+        const answers = fs.readdirSync(answersDir)
+          .filter(file => answerPattern.test(file))
+          .map(async file => {
+            const answerPath = path.join(answersDir, file)
+            const answerData = await fs.promises.readFile(answerPath)
+            const answerExt = path.extname(answerPath).toLowerCase().slice(1)
+            const answerBase64 = answerData.toString('base64')
+            
+            // 获取答案元数据
+            let answerMetadata = null
+            try {
+              const metadataPath = path.join(metadataDir, `答案${file}.json`)
+              if (fs.existsSync(metadataPath)) {
+                const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
+                answerMetadata = JSON.parse(metadataContent)
+              }
+            } catch (error) {
+              console.error('读取答案元数据失败:', error)
+            }
+            
+            return {
+              path: answerPath,
+              preview: `data:image/${answerExt};base64,${answerBase64}`,
+              originalFileId: answerMetadata?.originalFileId,
+              metadata: answerMetadata?.metadata
+            }
+          })
+
+        dateItem.mistakes.push({
+          path: mistakePath,
+          preview: `data:image/${mistakeExt};base64,${mistakeBase64}`,
+          originalFileId: mistakeMetadata?.originalFileId,
+          metadata: mistakeMetadata?.metadata,
+          answers: await Promise.all(answers)
+        })
+      }
+
+      result.push(dateItem)
+    }
+
+    // 按日期倒序排序
+    result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error('获取导出记录失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 添加删除导出记录的处理函数
+ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
+  try {
+    const exportBaseDir = getExportBaseDir()
+    const datePath = path.join(exportBaseDir, date)
+    
+    if (fs.existsSync(datePath)) {
+      await fs.promises.rm(datePath, { recursive: true })
+      return { success: true }
+    }
+    
+    return { success: false, error: '目录不存在' }
+  } catch (error) {
+    console.error('删除导出记录失败:', error)
     return { success: false, error: error.message }
   }
 })

@@ -159,6 +159,11 @@ export interface IpcRenderer {
     }>
     exportMistake: (params: ExportMistakeParams) => Promise<ExportMistakeResult>
     getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem[]>>
+    getExportedMistakes: () => Promise<Result<MistakeItem[]>>
+    deleteExportedMistakes: (date: string) => Promise<{
+      success: boolean
+      error?: string
+    }>
   }
 }
 
@@ -303,7 +308,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
     exportMistake: (params: ExportMistakeParams) => 
       ipcRenderer.invoke('file:export-mistake', params),
-    getMistakeDetails: (fileId: string) => ipcRenderer.invoke('file:get-mistake-details', fileId)
+    getMistakeDetails: (fileId: string) => ipcRenderer.invoke('file:get-mistake-details', fileId),
+    getExportedMistakes: () => ipcRenderer.invoke('file:get-exported-mistakes'),
+    deleteExportedMistakes: (date: string) => ipcRenderer.invoke('file:delete-exported-mistakes', date),
   }
 })
 
@@ -450,6 +457,11 @@ declare global {
         }>
         exportMistake: (params: ExportMistakeParams) => Promise<ExportMistakeResult>
         getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem[]>>
+        getExportedMistakes: () => Promise<Result<MistakeItem[]>>
+        deleteExportedMistakes: (date: string) => Promise<{
+          success: boolean
+          error?: string
+        }>
       }
     }
   }

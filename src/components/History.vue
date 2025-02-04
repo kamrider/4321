@@ -58,6 +58,10 @@ const editingMetadata = ref({
 })
 const existingTags = ref<string[]>([])
 
+// 添加导出模式相关的状态
+const isExportMode = ref(false)
+const selectedExportItems = ref<HistoryItem[]>([])
+
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
   return selectedExamItems.value.reduce((total, item) => {
@@ -442,14 +446,46 @@ const toggleAnswer = async () => {
 const exportHistory = async () => {
   try {
     loading.value = true
-    const result = await window.ipcRenderer.file.exportTrainingHistory(
-      sortType.value,
-      sortOrder.value
-    )
-    if (result.success) {
-      ElMessage.success(`成功导出到: ${result.data.exportDir}`)
+    
+    // 如果在导出模式下，只导出选中的项目
+    if (isExportMode.value && selectedExportItems.value.length > 0) {
+      for (const item of selectedExportItems.value) {
+        try {
+          // 获取当前错题的完整信息
+          const mistakeResult = await window.ipcRenderer.file.getMistakeDetails(item.fileId)
+          if (!mistakeResult.success) {
+            throw new Error('获取错题详情失败')
+          }
+
+          // 调用导出函数
+          const exportResult = await window.ipcRenderer.file.exportMistake({
+            mistake: mistakeResult.data,
+            answer: mistakeResult.data.metadata?.pairedWith,
+            exportTime: new Date().toISOString()
+          })
+          
+          if (exportResult.success) {
+            ElMessage.success(`错题已导出到: ${exportResult.data.exportPath}`)
+          }
+        } catch (error) {
+          console.error('导出错题失败:', error)
+          ElMessage.warning('部分错题导出失败')
+        }
+      }
+      
+      // 导出完成后退出导出模式
+      cancelExportMode()
     } else {
-      throw new Error(result.error)
+      // 原有的全部导出逻辑
+      const result = await window.ipcRenderer.file.exportTrainingHistory(
+        sortType.value,
+        sortOrder.value
+      )
+      if (result.success) {
+        ElMessage.success(`成功导出到: ${result.data.exportDir}`)
+      } else {
+        throw new Error(result.error)
+      }
     }
   } catch (error) {
     console.error('导出失败:', error)
@@ -816,11 +852,40 @@ const startExam = () => {
   // 打开第一道题的详情
   handleViewDetail(selectedExamItems.value[0])
 }
+
+// 添加导出模式切换函数
+const toggleExportMode = () => {
+  isExportMode.value = !isExportMode.value
+  if (!isExportMode.value) {
+    selectedExportItems.value = []
+  }
+}
+
+// 添加选择项目函数
+const toggleExportItemSelection = (item: HistoryItem) => {
+  const index = selectedExportItems.value.findIndex(i => i.fileId === item.fileId)
+  if (index === -1) {
+    selectedExportItems.value.push(item)
+  } else {
+    selectedExportItems.value.splice(index, 1)
+  }
+}
+
+// 判断项目是否被选中
+const isExportItemSelected = (item: HistoryItem) => {
+  return selectedExportItems.value.some(i => i.fileId === item.fileId)
+}
+
+// 取消导出模式
+const cancelExportMode = () => {
+  isExportMode.value = false
+  selectedExportItems.value = []
+}
 </script>
 
 <template>
   <div class="mistake-container">
-    <!-- 添加顶部导航栏 -->
+    <!-- 修改顶部导航栏 -->
     <div class="nav-header">
       <div class="sort-controls">
         <el-button-group>
@@ -846,10 +911,49 @@ const startExam = () => {
       </div>
       
       <div class="header-actions">
-        <el-button type="primary" @click="exportHistory" :loading="loading">
-          导出训练历史
-        </el-button>
+        <div class="export-mode-controls">
+          <el-button 
+            type="primary" 
+            @click="toggleExportMode"
+            :class="{ 'is-active': isExportMode }"
+          >
+            {{ isExportMode ? '退出导出模式' : '选择导出' }}
+          </el-button>
+          
+          <template v-if="isExportMode">
+            <div class="export-info">
+              已选择: {{ selectedExportItems.length }} 题
+            </div>
+            <el-button 
+              type="success" 
+              :disabled="selectedExportItems.length === 0"
+              @click="exportHistory"
+              :loading="loading"
+            >
+              导出选中
+            </el-button>
+            <el-button 
+              type="info" 
+              @click="cancelExportMode"
+            >
+              取消
+            </el-button>
+          </template>
+          
+          <el-button 
+            v-else
+            type="primary" 
+            @click="exportHistory" 
+            :loading="loading"
+          >
+            导出全部
+          </el-button>
+        </div>
+        
         <div class="exam-mode-controls">
+          <el-button type="primary" @click="exportHistory" :loading="loading">
+            导出训练历史
+          </el-button>
           <el-button 
             type="primary" 
             @click="toggleExamMode"
@@ -894,10 +998,10 @@ const startExam = () => {
                  'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
                  'is-paired': item.metadata?.isPaired,
-                 'is-selectable': isExamMode,
-                 'is-selected': isExamMode && isItemSelected(item)
+                 'is-selectable': isExamMode || isExportMode,
+                 'is-selected': (isExamMode && isItemSelected(item)) || (isExportMode && isExportItemSelected(item))
                }"
-               @click="isExamMode ? toggleItemSelection(item) : handleViewDetail(item)"
+               @click="isExamMode ? toggleItemSelection(item) : isExportMode ? toggleExportItemSelection(item) : handleViewDetail(item)"
           >
             <el-image 
               :src="item.preview" 
@@ -1638,5 +1742,24 @@ const startExam = () => {
 
 .edit-form {
   padding: 20px;
+}
+
+.export-mode-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.export-info {
+  background-color: var(--el-color-info-light-9);
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 20px;
+  align-items: center;
 }
 </style> 

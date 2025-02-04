@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Delete, Check, Close } from '@element-plus/icons-vue'
 
@@ -31,6 +31,17 @@ const showAnswer = ref(false)
 
 // 添加训练相关的状态
 const isTraining = ref(false)
+
+// 添加计算属性来判断是否可以训练
+const canTrain = computed(() => {
+  if (!activeItem.value?.metadata?.nextTrainingDate) {
+    return false
+  }
+  
+  const nextTrainingDate = new Date(activeItem.value.metadata.nextTrainingDate)
+  const now = new Date()
+  return nextTrainingDate <= now
+})
 
 onMounted(async () => {
   try {
@@ -205,6 +216,7 @@ const handleTrainingResult = async (remembered: boolean) => {
             type="success" 
             :icon="Check"
             @click="handleTrainingResult(true)"
+            :disabled="!canTrain"
           >
             记住了
           </el-button>
@@ -212,10 +224,14 @@ const handleTrainingResult = async (remembered: boolean) => {
             type="danger" 
             :icon="Close"
             @click="handleTrainingResult(false)"
+            :disabled="!canTrain"
           >
             没记住
           </el-button>
         </el-button-group>
+        <div v-if="!canTrain" class="training-tip">
+          下次训练时间未到
+        </div>
       </div>
       
       <div class="answer-control">
@@ -385,5 +401,12 @@ const handleTrainingResult = async (remembered: boolean) => {
 
 .training-control .el-button + .el-button {
   margin-left: 16px;
+}
+
+.training-tip {
+  margin-top: 10px;
+  color: #909399;
+  font-size: 14px;
+  text-align: center;
 }
 </style> 

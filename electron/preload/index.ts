@@ -128,6 +128,26 @@ interface ExportMistakeResult {
   }
 }
 
+// 在接口定义部分添加新的类型
+interface ExportToWordItem {
+  mistake: {
+    path: string
+    metadata?: any
+  }
+  answer?: {
+    path: string
+    metadata?: any
+  }
+}
+
+interface ExportToWordResult {
+  success: boolean
+  data?: {
+    filePath: string
+  }
+  error?: string
+}
+
 export interface IpcRenderer {
   // 基础 IPC 方法
   on(channel: string, func: (...args: any[]) => void): void
@@ -164,6 +184,7 @@ export interface IpcRenderer {
       success: boolean
       error?: string
     }>
+    exportToWord: (items: ExportToWordItem[]) => Promise<ExportToWordResult>
   }
 }
 
@@ -311,6 +332,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     getMistakeDetails: (fileId: string) => ipcRenderer.invoke('file:get-mistake-details', fileId),
     getExportedMistakes: () => ipcRenderer.invoke('file:get-exported-mistakes'),
     deleteExportedMistakes: (date: string) => ipcRenderer.invoke('file:delete-exported-mistakes', date),
+    exportToWord: (items: ExportToWordItem[]) => 
+      ipcRenderer.invoke('file:export-to-word', items),
   }
 })
 
@@ -462,6 +485,7 @@ declare global {
           success: boolean
           error?: string
         }>
+        exportToWord: (items: ExportToWordItem[]) => Promise<ExportToWordResult>
       }
     }
   }

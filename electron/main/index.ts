@@ -9,6 +9,7 @@ import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
 import type { TrainingConfig } from './training-manager'
 import { v4 as uuidv4 } from 'uuid'
+import { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer } from 'docx'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -1363,9 +1364,20 @@ ipcMain.handle('file:export-mistake', async (_, params: {
       JSON.stringify(mistakeMetadata, null, 2)
     )
 
+    // 准备返回的路径信息
+    const exportInfo = {
+      mistake: {
+        path: mistakeTargetPath,
+        metadata: params.mistake.metadata
+      },
+      answer: null as any
+    }
+
     // 如果有答案，使用对应的命名方式
     if (params.answer) {
       const answers = Array.isArray(params.answer) ? params.answer : [params.answer]
+      const answerPaths = []
+      
       for (let i = 0; i < answers.length; i++) {
         const answer = answers[i]
         const answerExt = path.extname(answer.path)
@@ -1384,13 +1396,22 @@ ipcMain.handle('file:export-mistake', async (_, params: {
           path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
           JSON.stringify(answerMetadata, null, 2)
         )
+
+        answerPaths.push({
+          path: answerTargetPath,
+          metadata: answer.metadata
+        })
       }
+
+      // 如果只有一个答案，直接赋值；如果有多个，返回数组
+      exportInfo.answer = answerPaths.length === 1 ? answerPaths[0] : answerPaths
     }
 
     return {
       success: true,
       data: {
-        exportPath: exportDir
+        exportPath: exportDir,
+        exportInfo
       }
     }
   } catch (error) {
@@ -1609,5 +1630,115 @@ ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
   } catch (error) {
     console.error('删除导出记录失败:', error)
     return { success: false, error: error.message }
+  }
+})
+
+// 添加导出到 Word 的处理函数
+ipcMain.handle('file:export-to-word', async (_, items: Array<{
+  mistake: {
+    path: string
+    metadata?: any
+  }
+  answer?: {
+    path: string
+    metadata?: any
+  }
+}>) => {
+  try {
+    // 让用户选择保存位置
+    const result = await dialog.showSaveDialog({
+      title: '保存 Word 文档',
+      defaultPath: `错题集_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.docx`,
+      filters: [
+        { name: 'Word 文档', extensions: ['docx'] }
+      ]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, error: '未选择保存位置' }
+    }
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({
+            text: "错题集",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER
+          })
+        ]
+      }]
+    })
+
+    // 添加每个错题和答案
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      
+      // 获取图片的实际尺寸
+      const mistakeImageBuffer = fs.readFileSync(item.mistake.path)
+      
+      // 添加错题标题和图片
+      doc.addSection({
+        children: [
+          new Paragraph({
+            text: `错题 ${i + 1}`,
+            heading: HeadingLevel.HEADING_2
+          }),
+          new Paragraph({
+            children: [
+              new ImageRun({
+                data: mistakeImageBuffer,
+                transformation: {
+                  width: 600,
+                  height: 0 // 设置为0让图片保持原始比例
+                }
+              })
+            ]
+          })
+        ]
+      })
+
+      // 如果有答案，添加答案
+      if (item.answer) {
+        const answerImageBuffer = fs.readFileSync(item.answer.path)
+        doc.addSection({
+          children: [
+            new Paragraph({
+              text: `答案 ${i + 1}`,
+              heading: HeadingLevel.HEADING_2
+            }),
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: answerImageBuffer,
+                  transformation: {
+                    width: 600,
+                    height: 0 // 设置为0让图片保持原始比例
+                  }
+                })
+              ]
+            })
+          ]
+        })
+      }
+    }
+
+    // 保存文档
+    const buffer = await Packer.toBuffer(doc)
+    fs.writeFileSync(result.filePath, buffer)
+
+    return {
+      success: true,
+      data: {
+        filePath: result.filePath
+      }
+    }
+  } catch (error) {
+    console.error('导出到 Word 失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
   }
 })

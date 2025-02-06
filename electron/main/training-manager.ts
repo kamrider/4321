@@ -140,16 +140,22 @@ export class TrainingManager {
   }
 
   private validateTrainingDate(trainingDate?: string): string {
-    if (!trainingDate) {
-      return new Date().toISOString()
-    }
+    let date: Date;
     
-    try {
-      new Date(trainingDate).toISOString()
-      return trainingDate
-    } catch (error) {
-      console.warn('无效的训练日期，使用当前时间:', error)
-      return new Date().toISOString()
+    if (trainingDate) {
+      try {
+        date = new Date(trainingDate);
+      } catch (error) {
+        console.warn('无效的训练日期，使用当前时间:', error);
+        date = new Date();
+      }
+    } else {
+      date = new Date();
     }
+
+    // 设置为当天的 0:00
+    date.setHours(0, 0, 0, 0);
+    
+    return date.toISOString();
   }
 }

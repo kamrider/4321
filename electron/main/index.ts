@@ -1115,7 +1115,7 @@ ipcMain.handle('file:export', async (event, filePaths: string[]) => {
 })
 
 // 添加导出训练历史的处理函数
-ipcMain.handle('file:export-training-history', async (_, sortType = 'time', sortOrder = 'desc') => {
+ipcMain.handle('file:export-training-history', async (event, sortType: string, sortOrder: string) => {
   try {
     const result = await dialog.showOpenDialog({
       title: '选择导出目录',
@@ -1740,5 +1740,38 @@ ipcMain.handle('file:export-to-word', async (_, items: Array<{
       success: false,
       error: error.message
     }
+  }
+})
+
+// 添加设置冻结状态的处理程序
+ipcMain.handle('metadata:set-frozen', async (_, fileId: string, isFrozen: boolean) => {
+  try {
+    const success = await metadataManager.setFrozen(fileId, isFrozen)
+    return { success }
+  } catch (error) {
+    console.error('设置冻结状态失败:', error)
+    return { success: false, error: '设置冻结状态失败' }
+  }
+})
+
+// 添加批量设置冻结状态的处理程序
+ipcMain.handle('metadata:set-multiple-frozen', async (_, fileIds: string[], isFrozen: boolean) => {
+  try {
+    const success = await metadataManager.setMultipleFrozen(fileIds, isFrozen)
+    return { success }
+  } catch (error) {
+    console.error('批量设置冻结状态失败:', error)
+    return { success: false, error: '批量设置冻结状态失败' }
+  }
+})
+
+// 添加获取冻结状态的处理程序
+ipcMain.handle('metadata:get-frozen', (_, fileId: string) => {
+  try {
+    const isFrozen = metadataManager.getFrozen(fileId)
+    return { success: true, data: isFrozen }
+  } catch (error) {
+    console.error('获取冻结状态失败:', error)
+    return { success: false, error: '获取冻结状态失败' }
   }
 })

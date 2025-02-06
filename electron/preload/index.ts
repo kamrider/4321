@@ -190,6 +190,7 @@ export interface IpcRenderer {
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
+  // 基础 IPC 方法
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
     return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
@@ -207,41 +208,31 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     return ipcRenderer.invoke(channel, ...omit)
   },
 
-  // 添加文件操作相关的方法
-  uploadFile: {
-    // 选择文件
-    select: () => ipcRenderer.invoke('file:select'),
-    
-    // 获取预览
-    getPreview: (filePath: string) => ipcRenderer.invoke('file:preview', filePath),
-    
-    // 开始上传
-    start: (filePaths: string[]) => ipcRenderer.invoke('file:upload', filePaths),
-    
-    // 取消上传
-    cancel: (filePath?: string) => ipcRenderer.invoke('file:cancel', filePath),
-    
-    // 清理临时文件
-    cleanupTemp: (filePath?: string) => ipcRenderer.invoke('file:cleanup-temp', filePath),
-    
-    // 粘贴上传
-    uploadPastedFile: (data: { buffer: ArrayBuffer, type: string, name: string }) => 
-      ipcRenderer.invoke('file:upload-paste', data),
-    
-    // 处理拖拽文件
-    handleDrop: (filePath: string) => ipcRenderer.invoke('file:handle-drop', filePath),
-    
-    // 监听进度
-    onProgress: (callback: (progress: any) => void) => {
-      const progressListener = (_: any, value: any) => callback(value)
-      ipcRenderer.on('file:progress', progressListener)
-      return () => {
-        ipcRenderer.removeListener('file:progress', progressListener)
-      }
-    }
+  // mistake 相关方法
+  mistake: {
+    getMistakes: () => ipcRenderer.invoke('file:get-mistakes'),
+    getTrainingHistory: () => ipcRenderer.invoke('file:get-training-history')
   },
 
-  // 添加训练相关方法
+  // metadata 相关方法
+  metadata: {
+    updateType: (fileId: string, type: 'mistake' | 'answer') => 
+      ipcRenderer.invoke('metadata:update-type', fileId, type),
+    pairImages: (fileId1: string, fileId2: string) => 
+      ipcRenderer.invoke('metadata:pair-images', fileId1, fileId2),
+    unpairImages: (fileId1: string, fileId2: string) => 
+      ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2),
+    updateDetails: (fileId: string, answerTimeLimit: number) => 
+      ipcRenderer.invoke('metadata:update-details', fileId, answerTimeLimit),
+    getAllTags: () => ipcRenderer.invoke('metadata:get-all-tags'),
+    getFrozen: (fileId: string) => ipcRenderer.invoke('metadata:get-frozen', fileId),
+    setFrozen: (fileId: string, isFrozen: boolean) => 
+      ipcRenderer.invoke('metadata:set-frozen', fileId, isFrozen),
+    setMultipleFrozen: (fileIds: string[], isFrozen: boolean) => 
+      ipcRenderer.invoke('metadata:set-multiple-frozen', fileIds, isFrozen)
+  },
+
+  // training 相关方法
   training: {
     submitResult: async (fileId: string, success: boolean, trainingDate?: string): Promise<TrainingResult> => {
       if (!fileId?.trim()) {
@@ -249,14 +240,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       }
       return await ipcRenderer.invoke('training:submit-result', fileId, success, trainingDate)
     },
-
     getHistory: async (fileId: string): Promise<TrainingResult<TrainingRecord[]>> => {
       if (!fileId?.trim()) {
         return { success: false, error: '无效的文件ID' }
       }
       return await ipcRenderer.invoke('training:get-history', fileId)
     },
-
     getNextTraining: async (fileId: string): Promise<TrainingResult<TrainingNextInfo>> => {
       if (!fileId?.trim()) {
         return { success: false, error: '无效的文件ID' }
@@ -265,67 +254,11 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     }
   },
 
-  // 添加 metadata 相关方法
-  metadata: {
-    // 添加 updateType 方法
-    updateType: (fileId: string, type: 'mistake' | 'answer') => 
-      ipcRenderer.invoke('metadata:update-type', fileId, type),
-    // 添加 pairImages 方法
-    pairImages: (fileId1: string, fileId2: string) => 
-      ipcRenderer.invoke('metadata:pair-images', fileId1, fileId2),
-    // 添加解绑方法
-    unpairImages: (fileId1: string, fileId2: string) => 
-      ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2),
-    // 添加 updateDetails 方法
-    updateDetails: (fileId: string, answerTimeLimit: number) => 
-      ipcRenderer.invoke('metadata:update-details', fileId, answerTimeLimit)
-  },
-
-  mistake: {
-    getMistakes: () => ipcRenderer.invoke('file:get-mistakes'),
-    getTrainingHistory: () => ipcRenderer.invoke('file:get-training-history')
-  },
-
-  // 在 window.ipcRenderer 中添加配置相关的方法
-  config: {
-    getTrainingConfig: async (): Promise<{
-      success: boolean
-      data?: TrainingConfig
-      error?: string
-    }> => {
-      return await ipcRenderer.invoke('config:get-training-config')
-    },
-    
-    updateTrainingConfig: async (config: TrainingConfig): Promise<{
-      success: boolean
-      error?: string
-    }> => {
-      console.log('preload 接收到配置:', config)
-      const result = await ipcRenderer.invoke('config:update-training-config', config)
-      console.log('preload 收到结果:', result)
-      return result
-    }
-  },
-
-  upload: {
-    uploadFile: async (filePaths: string[]) => {
-      return await ipcRenderer.invoke('file:upload', filePaths)
-    },
-    uploadPastedFile: async (file: File) => {
-      // 将文件转换为 ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer()
-      // 传递 Buffer 和文件类型
-      return await ipcRenderer.invoke('file:upload-paste', {
-        buffer: arrayBuffer,
-        type: file.type
-      })
-    }
-  },
-
-  // 文件相关方法
+  // file 相关方法
   file: {
     export: (paths: string[]) => ipcRenderer.invoke('file:export', paths),
-    exportTrainingHistory: () => ipcRenderer.invoke('file:export-training-history'),
+    exportTrainingHistory: (sortType?: string, sortOrder?: string) => 
+      ipcRenderer.invoke('file:export-training-history', sortType, sortOrder),
     delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
     exportMistake: (params: ExportMistakeParams) => 
       ipcRenderer.invoke('file:export-mistake', params),
@@ -333,7 +266,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     getExportedMistakes: () => ipcRenderer.invoke('file:get-exported-mistakes'),
     deleteExportedMistakes: (date: string) => ipcRenderer.invoke('file:delete-exported-mistakes', date),
     exportToWord: (items: ExportToWordItem[]) => 
-      ipcRenderer.invoke('file:export-to-word', items),
+      ipcRenderer.invoke('file:export-to-word', items)
   }
 })
 

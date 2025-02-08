@@ -31,6 +31,7 @@ interface FileMetadata {
   pairId?: string               // 配对的图片ID
   isPaired?: boolean           // 是否已配对
   answerTimeLimit?: number     // 答题时限（秒）
+  isFrozen?: boolean           // 是否被冻结（例如：已导出但未完成训练）
 }
 
 interface MetadataStore {

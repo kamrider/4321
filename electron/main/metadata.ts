@@ -59,7 +59,8 @@ export class MetadataManager {
       type: 'mistake',
       pairId: null,
       isPaired: false,
-      answerTimeLimit: 300
+      answerTimeLimit: 300,
+      isFrozen: false
     }
   }
 
@@ -140,6 +141,26 @@ export class MetadataManager {
     }
   }
 
+  private async migrateIsFrozen() {
+    let hasChanges = false
+    
+    // 遍历所有文件元数据
+    for (const fileId in this.metadata.files) {
+      const file = this.metadata.files[fileId]
+      
+      // 如果没有 isFrozen 字段，添加默认值
+      if (file.isFrozen === undefined) {
+        file.isFrozen = false
+        hasChanges = true
+      }
+    }
+
+    // 如果有更改，保存元数据
+    if (hasChanges) {
+      await this.saveMetadata()
+    }
+  }
+
   private loadMetadata() {
     try {
       if (fs.existsSync(this.metadataPath)) {
@@ -151,6 +172,7 @@ export class MetadataManager {
         
         // 在加载后立即进行迁移
         this.migrateMetadata()
+        this.migrateIsFrozen()
       } else {
         // 如果元数据文件不存在，创建一个新的
         this.metadata = this.createDefaultStore(this.baseDir)
@@ -158,6 +180,7 @@ export class MetadataManager {
         
         // 在创建新元数据后也进行迁移
         this.migrateMetadata()
+        this.migrateIsFrozen()
       }
     } catch (error) {
       console.error('加载元数据失败:', error)
@@ -169,6 +192,7 @@ export class MetadataManager {
       
       // 在创建新元数据后也进行迁移
       this.migrateMetadata()
+      this.migrateIsFrozen()
     }
   }
 
@@ -448,5 +472,34 @@ export class MetadataManager {
   // 获取当前成员
   getCurrentMember(): string | null {
     return this.currentMember
+  }
+
+  // 添加设置冻结状态的方法
+  async setFrozen(fileId: string, isFrozen: boolean) {
+    if (this.metadata.files[fileId]) {
+      this.metadata.files[fileId].isFrozen = isFrozen
+      await this.saveMetadata()
+      return true
+    }
+    return false
+  }
+
+  // 添加获取冻结状态的方法
+  getFrozen(fileId: string): boolean {
+    return this.metadata.files[fileId]?.isFrozen || false
+  }
+
+  // 添加批量设置冻结状态的方法
+  async setMultipleFrozen(fileIds: string[], isFrozen: boolean) {
+    let success = true
+    for (const fileId of fileIds) {
+      if (this.metadata.files[fileId]) {
+        this.metadata.files[fileId].isFrozen = isFrozen
+      } else {
+        success = false
+      }
+    }
+    await this.saveMetadata()
+    return success
   }
 } 

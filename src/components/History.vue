@@ -315,6 +315,12 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
 
 // 修改答题函数，使用正确的 submitResult 方法
 const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
+  // 检查是否被冻结
+  if (item.metadata?.isFrozen) {
+    ElMessage.warning('该项目已被冻结，无法训练')
+    return
+  }
+
   // 停止计时
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
@@ -350,6 +356,12 @@ const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
 
 // 修改查看详情处理函数
 const handleViewDetail = (item: HistoryItem) => {
+  // 检查是否被冻结
+  if (item.metadata?.isFrozen) {
+    ElMessage.warning('该项目已被冻结，无法训练')
+    return
+  }
+
   if (activeItem.value) {
     saveCurrentTimerState()
   }
@@ -465,6 +477,12 @@ const exportHistory = async () => {
           })
           
           if (exportResult.success) {
+            // 设置冻结状态
+            await window.ipcRenderer.file.setFrozen(item.fileId, true)
+            // 更新本地状态
+            if (item.metadata) {
+              item.metadata.isFrozen = true
+            }
             ElMessage.success(`错题已导出到: ${exportResult.data.exportPath}`)
           }
         } catch (error) {
@@ -507,6 +525,13 @@ onUnmounted(() => {
 
 // 修改提交训练结果的方法
 const submitTraining = async (fileId: string, success: boolean) => {
+  // 检查是否被冻结
+  const item = historyList.value.find(item => item.fileId === fileId)
+  if (item?.metadata?.isFrozen) {
+    ElMessage.warning('该项目已被冻结，无法训练')
+    return
+  }
+
   // 停止计时
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
@@ -999,7 +1024,8 @@ const cancelExportMode = () => {
                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
                  'is-paired': item.metadata?.isPaired,
                  'is-selectable': isExamMode || isExportMode,
-                 'is-selected': (isExamMode && isItemSelected(item)) || (isExportMode && isExportItemSelected(item))
+                 'is-selected': (isExamMode && isItemSelected(item)) || (isExportMode && isExportItemSelected(item)),
+                 'is-frozen': item.metadata?.isFrozen
                }"
                @click="isExamMode ? toggleItemSelection(item) : isExportMode ? toggleExportItemSelection(item) : handleViewDetail(item)"
           >
@@ -1761,5 +1787,24 @@ const cancelExportMode = () => {
   display: flex;
   gap: 20px;
   align-items: center;
+}
+
+/* 添加冻结状态的样式 */
+.preview-item.is-frozen {
+  border: 2px solid var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+  position: relative;
+}
+
+.preview-item.is-frozen::after {
+  content: '已冻结';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: var(--el-color-primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 </style> 

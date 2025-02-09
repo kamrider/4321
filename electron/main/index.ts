@@ -1742,3 +1742,34 @@ ipcMain.handle('file:export-to-word', async (_, items: Array<{
     }
   }
 })
+
+// 添加冻结状态相关的 IPC 处理器
+ipcMain.handle('setFrozen', async (event, fileId: string, isFrozen: boolean) => {
+  try {
+    const result = await metadataManager.setFrozen(fileId, isFrozen)
+    return { success: result }
+  } catch (error) {
+    console.error('设置冻结状态失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+ipcMain.handle('getFrozen', (event, fileId: string) => {
+  try {
+    const isFrozen = metadataManager.getFrozen(fileId)
+    return { success: true, isFrozen }
+  } catch (error) {
+    console.error('获取冻结状态失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+ipcMain.handle('setMultipleFrozen', async (event, fileIds: string[], isFrozen: boolean) => {
+  try {
+    const result = await metadataManager.setMultipleFrozen(fileIds, isFrozen)
+    return { success: result }
+  } catch (error) {
+    console.error('批量设置冻结状态失败:', error)
+    return { success: false, error: error.message }
+  }
+})

@@ -185,6 +185,19 @@ export interface IpcRenderer {
       error?: string
     }>
     exportToWord: (items: ExportToWordItem[]) => Promise<ExportToWordResult>
+    setFrozen: (fileId: string, isFrozen: boolean) => Promise<{
+      success: boolean
+      error?: string
+    }>
+    getFrozen: (fileId: string) => Promise<{
+      success: boolean
+      isFrozen: boolean
+      error?: string
+    }>
+    setMultipleFrozen: (fileIds: string[], isFrozen: boolean) => Promise<{
+      success: boolean
+      error?: string
+    }>
   }
 }
 
@@ -334,6 +347,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     deleteExportedMistakes: (date: string) => ipcRenderer.invoke('file:delete-exported-mistakes', date),
     exportToWord: (items: ExportToWordItem[]) => 
       ipcRenderer.invoke('file:export-to-word', items),
+    setFrozen: (fileId: string, isFrozen: boolean) => 
+      ipcRenderer.invoke('setFrozen', fileId, isFrozen),
+    getFrozen: (fileId: string) => 
+      ipcRenderer.invoke('getFrozen', fileId),
+    setMultipleFrozen: (fileIds: string[], isFrozen: boolean) => 
+      ipcRenderer.invoke('setMultipleFrozen', fileIds, isFrozen),
   }
 })
 
@@ -486,6 +505,19 @@ declare global {
           error?: string
         }>
         exportToWord: (items: ExportToWordItem[]) => Promise<ExportToWordResult>
+        setFrozen: (fileId: string, isFrozen: boolean) => Promise<{
+          success: boolean
+          error?: string
+        }>
+        getFrozen: (fileId: string) => Promise<{
+          success: boolean
+          isFrozen: boolean
+          error?: string
+        }>
+        setMultipleFrozen: (fileIds: string[], isFrozen: boolean) => Promise<{
+          success: boolean
+          error?: string
+        }>
       }
     }
   }

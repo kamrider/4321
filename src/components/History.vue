@@ -886,8 +886,14 @@ const toggleExportMode = () => {
   }
 }
 
-// 添加选择项目函数
+// 修改 toggleExportItemSelection 函数
 const toggleExportItemSelection = (item: HistoryItem) => {
+  // 如果已冻结,则不允许选择
+  if (item.metadata?.isFrozen) {
+    ElMessage.warning('该项目已被冻结,无法再次导出')
+    return
+  }
+
   const index = selectedExportItems.value.findIndex(i => i.fileId === item.fileId)
   if (index === -1) {
     selectedExportItems.value.push(item)
@@ -1023,7 +1029,7 @@ const cancelExportMode = () => {
                  'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
                  'is-paired': item.metadata?.isPaired,
-                 'is-selectable': isExamMode || isExportMode,
+                 'is-selectable': (isExamMode || isExportMode) && !item.metadata?.isFrozen,
                  'is-selected': (isExamMode && isItemSelected(item)) || (isExportMode && isExportItemSelected(item)),
                  'is-frozen': item.metadata?.isFrozen
                }"
@@ -1789,11 +1795,13 @@ const cancelExportMode = () => {
   align-items: center;
 }
 
-/* 添加冻结状态的样式 */
+/* 修改冻结状态的样式,添加禁用效果 */
 .preview-item.is-frozen {
   border: 2px solid var(--el-color-primary);
   background-color: var(--el-color-primary-light-9);
   position: relative;
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .preview-item.is-frozen::after {

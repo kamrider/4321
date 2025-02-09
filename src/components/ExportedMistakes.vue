@@ -122,6 +122,11 @@ const handleTrainingResult = async (remembered: boolean) => {
           activeItem.value.metadata.trainingInterval = nextTraining.data.currentInterval
           activeItem.value.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
         }
+
+        // 解冻该错题
+        await window.ipcRenderer.file.setFrozen(activeItem.value.originalFileId, false)
+        activeItem.value.metadata.isFrozen = false
+        ElMessage.success('该错题已解冻')
       }
     } else {
       throw new Error(result.error)

@@ -1317,7 +1317,7 @@ ipcMain.handle('metadata:update-details', async (_, fileId: string, answerTimeLi
   }
 })
 
-// 添加导出错题的处理函数
+// 修改导出错题的处理函数
 ipcMain.handle('file:export-mistake', async (_, params: {
   mistake: MistakeItem
   answer: MistakeItem | MistakeItem[] | null
@@ -1353,22 +1353,22 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
     await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
 
-    // 保存错题的元数据
-    const mistakeMetadata = {
+    // 保存错题的导出信息（不再复制完整的 metadata）
+    const mistakeExportInfo = {
       originalFileId: params.mistake.fileId,
       exportDate: today.toISOString(),
-      metadata: params.mistake.metadata
+      exportNumber: mistakeNumber
     }
     await fs.promises.writeFile(
       path.join(metadataDir, `错题${mistakeNumber}.json`),
-      JSON.stringify(mistakeMetadata, null, 2)
+      JSON.stringify(mistakeExportInfo, null, 2)
     )
 
     // 准备返回的路径信息
     const exportInfo = {
       mistake: {
         path: mistakeTargetPath,
-        metadata: params.mistake.metadata
+        originalFileId: params.mistake.fileId
       },
       answer: null as any
     }
@@ -1381,29 +1381,27 @@ ipcMain.handle('file:export-mistake', async (_, params: {
       for (let i = 0; i < answers.length; i++) {
         const answer = answers[i]
         const answerExt = path.extname(answer.path)
-        // 生成答案文件名：错题序号.答案序号 + 原始扩展名
         const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`
         const answerTargetPath = path.join(answersDir, answerFileName)
         await fs.promises.copyFile(answer.path, answerTargetPath)
 
-        // 保存答案的元数据
-        const answerMetadata = {
+        // 保存答案的导出信息
+        const answerExportInfo = {
           originalFileId: answer.fileId,
           exportDate: today.toISOString(),
-          metadata: answer.metadata
+          exportNumber: `${mistakeNumber}.${i + 1}`
         }
         await fs.promises.writeFile(
           path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
-          JSON.stringify(answerMetadata, null, 2)
+          JSON.stringify(answerExportInfo, null, 2)
         )
 
         answerPaths.push({
           path: answerTargetPath,
-          metadata: answer.metadata
+          originalFileId: answer.fileId
         })
       }
 
-      // 如果只有一个答案，直接赋值；如果有多个，返回数组
       exportInfo.answer = answerPaths.length === 1 ? answerPaths[0] : answerPaths
     }
 
@@ -1423,82 +1421,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
   }
 })
 
-// 添加获取错题详情的处理函数
-ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
-  try {
-    const currentDir = path.join(metadataManager.getCurrentMemberDir())
-    const metadata = await metadataManager.getMetadata()
-    const file = metadata.files[fileId]
-    
-    if (!file) {
-      return { success: false, error: '文件不存在' }
-    }
-
-    const filePath = path.join(currentDir, file.relativePath)
-    const fileData = await fs.promises.readFile(filePath)
-    const fileExtension = path.extname(filePath).toLowerCase().slice(1)
-    const base64Data = fileData.toString('base64')
-    
-    // 构建错题数据
-    const mistakeData = {
-      fileId,
-      path: filePath,
-      preview: `data:image/${fileExtension};base64,${base64Data}`,
-      uploadDate: file.uploadDate,
-      originalDate: file.originalDate,
-      originalFileName: file.originalFileName,
-      fileSize: file.fileSize,
-      lastModified: file.lastModified,
-      hash: file.hash,
-      metadata: {
-        ...file,
-        pairedWith: null
-      }
-    }
-
-    // 如果有配对的答案，获取答案信息
-    if (file.isPaired && file.pairId) {
-      const pairedAnswers = Object.entries(metadata.files)
-        .filter(([_, f]) => f.type === 'answer' && f.pairId === file.pairId)
-        .map(([id, f]) => {
-          const answerPath = path.join(currentDir, f.relativePath)
-          const answerData = fs.readFileSync(answerPath)
-          const answerExtension = path.extname(answerPath).toLowerCase().slice(1)
-          const answerBase64 = answerData.toString('base64')
-          
-          return {
-            fileId: id,
-            path: answerPath,
-            preview: `data:image/${answerExtension};base64,${answerBase64}`,
-            uploadDate: f.uploadDate,
-            originalDate: f.originalDate,
-            originalFileName: f.originalFileName,
-            fileSize: f.fileSize,
-            lastModified: f.lastModified,
-            hash: f.hash,
-            metadata: {
-              ...f,
-              pairedWith: null
-            }
-          }
-        })
-
-      if (pairedAnswers.length > 0) {
-        mistakeData.metadata.pairedWith = pairedAnswers.length === 1 ? pairedAnswers[0] : pairedAnswers
-      }
-    }
-
-    return {
-      success: true,
-      data: mistakeData
-    }
-  } catch (error) {
-    console.error('获取错题详情失败:', error)
-    return { success: false, error: error.message }
-  }
-})
-
-// 添加获取导出错题记录的处理函数
+// 修改获取导出错题的处理函数
 ipcMain.handle('file:get-exported-mistakes', async () => {
   try {
     const exportBaseDir = getExportBaseDir()
@@ -1508,25 +1431,26 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
       mistakes: {
         path: string
         preview: string
-        originalFileId?: string
+        originalFileId: string
         metadata?: any
         answers: Array<{
           path: string
           preview: string
-          originalFileId?: string
+          originalFileId: string
           metadata?: any
         }>
       }[]
     }[] = []
 
-    // 检查导出目录是否存在
     if (!fs.existsSync(exportBaseDir)) {
       return { success: true, data: [] }
     }
 
+    // 获取原始文件的 metadata
+    const metadata = await metadataManager.getMetadata()
+
     // 获取所有日期文件夹
     const dateDirs = fs.readdirSync(exportBaseDir)
-    
     for (const dateDir of dateDirs) {
       const datePath = path.join(exportBaseDir, dateDir)
       const mistakesDir = path.join(datePath, '错题')
@@ -1550,14 +1474,19 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
         const mistakeExt = path.extname(mistakePath).toLowerCase().slice(1)
         const mistakeBase64 = mistakeData.toString('base64')
         
-        // 获取错题元数据
+        // 获取错题导出信息
         const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
-        let mistakeMetadata = null
+        let mistakeExportInfo = null
+        let originalMetadata = null
         try {
           const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
           if (fs.existsSync(metadataPath)) {
             const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
-            mistakeMetadata = JSON.parse(metadataContent)
+            mistakeExportInfo = JSON.parse(metadataContent)
+            // 获取原始文件的最新 metadata
+            if (mistakeExportInfo.originalFileId && metadata.files[mistakeExportInfo.originalFileId]) {
+              originalMetadata = metadata.files[mistakeExportInfo.originalFileId]
+            }
           }
         } catch (error) {
           console.error('读取错题元数据失败:', error)
@@ -1573,13 +1502,18 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
             const answerExt = path.extname(answerPath).toLowerCase().slice(1)
             const answerBase64 = answerData.toString('base64')
             
-            // 获取答案元数据
-            let answerMetadata = null
+            // 获取答案导出信息和原始 metadata
+            let answerExportInfo = null
+            let answerOriginalMetadata = null
             try {
               const metadataPath = path.join(metadataDir, `答案${file}.json`)
               if (fs.existsSync(metadataPath)) {
                 const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
-                answerMetadata = JSON.parse(metadataContent)
+                answerExportInfo = JSON.parse(metadataContent)
+                // 获取原始文件的最新 metadata
+                if (answerExportInfo.originalFileId && metadata.files[answerExportInfo.originalFileId]) {
+                  answerOriginalMetadata = metadata.files[answerExportInfo.originalFileId]
+                }
               }
             } catch (error) {
               console.error('读取答案元数据失败:', error)
@@ -1588,16 +1522,16 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
             return {
               path: answerPath,
               preview: `data:image/${answerExt};base64,${answerBase64}`,
-              originalFileId: answerMetadata?.originalFileId,
-              metadata: answerMetadata?.metadata
+              originalFileId: answerExportInfo?.originalFileId,
+              metadata: answerOriginalMetadata
             }
           })
 
         dateItem.mistakes.push({
           path: mistakePath,
           preview: `data:image/${mistakeExt};base64,${mistakeBase64}`,
-          originalFileId: mistakeMetadata?.originalFileId,
-          metadata: mistakeMetadata?.metadata,
+          originalFileId: mistakeExportInfo?.originalFileId,
+          metadata: originalMetadata,
           answers: await Promise.all(answers)
         })
       }

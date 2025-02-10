@@ -112,21 +112,23 @@ const handleTrainingResult = async (remembered: boolean) => {
     if (result.success) {
       ElMessage.success(remembered ? '太棒了！继续保持！' : '没关系，下次继续加油！')
       
-      // 更新本地状态
-      if (activeItem.value.metadata) {
-        const nextTraining = await window.ipcRenderer.training.getNextTraining(
-          activeItem.value.originalFileId
+      // 重新加载导出列表以获取最新的 metadata
+      const exportedResult = await window.ipcRenderer.file.getExportedMistakes()
+      if (exportedResult.success) {
+        exportedList.value = exportedResult.data
+        
+        // 更新当前激活项的 metadata
+        const currentDate = exportedList.value.find(date => 
+          date.mistakes.some(m => m.originalFileId === activeItem.value?.originalFileId)
         )
-        if (nextTraining.success) {
-          activeItem.value.metadata.proficiency = nextTraining.data.currentProficiency
-          activeItem.value.metadata.trainingInterval = nextTraining.data.currentInterval
-          activeItem.value.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
+        if (currentDate) {
+          const updatedMistake = currentDate.mistakes.find(m => 
+            m.originalFileId === activeItem.value?.originalFileId
+          )
+          if (updatedMistake) {
+            activeItem.value = updatedMistake
+          }
         }
-
-        // 解冻该错题
-        await window.ipcRenderer.file.setFrozen(activeItem.value.originalFileId, false)
-        activeItem.value.metadata.isFrozen = false
-        ElMessage.success('该错题已解冻')
       }
     } else {
       throw new Error(result.error)

@@ -3,21 +3,23 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Delete, Check, Close } from '@element-plus/icons-vue'
 
-interface ExportedItem {
-  date: string
+interface ExportedMistake {
   path: string
-  mistakes: {
+  preview: string
+  originalFileId?: string
+  metadata?: any
+  answers: Array<{
     path: string
     preview: string
     originalFileId?: string
     metadata?: any
-    answers: Array<{
-      path: string
-      preview: string
-      originalFileId?: string
-      metadata?: any
-    }>
-  }[]
+  }>
+}
+
+interface ExportedItem {
+  date: string
+  path: string
+  mistakes: ExportedMistake[]
 }
 
 const exportedList = ref<ExportedItem[]>([])
@@ -45,8 +47,20 @@ const canTrain = computed(() => {
 
 onMounted(async () => {
   try {
-    const result = await window.ipcRenderer.file.getExportedMistakes()
+    const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
     if (result.success) {
+      // 获取每个源文件的metadata
+      for (const item of result.data) {
+        for (const mistake of item.mistakes) {
+          if (mistake.originalFileId) {
+            const sourceMetadata = await window.ipcRenderer.invoke('file:get-mistake-details', mistake.originalFileId)
+            if (sourceMetadata.success && sourceMetadata.data) {
+              mistake.metadata = sourceMetadata.data.metadata
+            }
+          }
+        }
+      }
+
       exportedList.value = result.data
     } else {
       throw new Error(result.error)

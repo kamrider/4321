@@ -148,6 +148,40 @@ interface ExportToWordResult {
   error?: string
 }
 
+// 修改基础错题信息接口，使其与 getMistakes 返回的数据结构一致（除了 preview）
+interface BasicMistakeInfo {
+  fileId: string;
+  path: string;
+  uploadDate: string;
+  originalDate: string;
+  originalFileName: string;
+  fileSize: number;
+  lastModified: string;
+  hash: string;
+  metadata: {
+    proficiency: number;
+    trainingInterval: number;
+    lastTrainingDate: string;
+    nextTrainingDate: string;
+    subject: string;
+    tags: string[];
+    notes?: string;
+    type?: 'mistake' | 'answer';
+    pairId?: string;
+    isPaired?: boolean;
+    answerTimeLimit?: number;
+    isFrozen?: boolean;
+    pairedWith?: any[];
+  }
+}
+
+// 预览图结果接口保持不变
+interface PreviewResult {
+  success: boolean;
+  data?: string;  // base64 图片数据
+  error?: string;
+}
+
 export interface IpcRenderer {
   // 基础 IPC 方法
   on(channel: string, func: (...args: any[]) => void): void
@@ -159,6 +193,8 @@ export interface IpcRenderer {
   mistake: {
     getMistakes: () => Promise<Result<MistakeItem[]>>
     getTrainingHistory: () => Promise<Result<MistakeItem[]>>
+    getBasicList: () => Promise<Result<BasicMistakeInfo[]>>
+    getPreview: (fileId: string) => Promise<PreviewResult>
   }
 
   // 文件相关方法
@@ -296,7 +332,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
   mistake: {
     getMistakes: () => ipcRenderer.invoke('file:get-mistakes'),
-    getTrainingHistory: () => ipcRenderer.invoke('file:get-training-history')
+    getTrainingHistory: () => ipcRenderer.invoke('file:get-training-history'),
+    getBasicList: () => ipcRenderer.invoke('get-basic-mistakes'),
+    getPreview: (fileId: string) => ipcRenderer.invoke('get-mistake-preview', fileId)
   },
 
   // 在 window.ipcRenderer 中添加配置相关的方法
@@ -469,6 +507,13 @@ declare global {
           data: MistakeItem[]
           error?: string
         }>
+        getTrainingHistory: () => Promise<{
+          success: boolean
+          data: MistakeItem[]
+          error?: string
+        }>
+        getBasicList: () => Promise<Result<BasicMistakeInfo[]>>
+        getPreview: (fileId: string) => Promise<PreviewResult>
       }
       config: {
         getTrainingConfig: () => Promise<{

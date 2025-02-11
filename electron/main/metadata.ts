@@ -502,4 +502,78 @@ export class MetadataManager {
     await this.saveMetadata()
     return success
   }
+
+  /**
+   * 获取错题基础信息列表(不含预览图)
+   */
+  async getBasicMetadataList(): Promise<Array<{
+    fileId: string;
+    path: string;
+    uploadDate: string;
+    originalDate: string;
+    originalFileName: string;
+    fileSize: number;
+    lastModified: string;
+    hash?: string;
+    metadata: {
+      proficiency: number;
+      trainingInterval: number;
+      lastTrainingDate: string;
+      nextTrainingDate: string;
+      subject: string;
+      tags: string[];
+      notes?: string;
+      type?: 'mistake' | 'answer';
+      pairId?: string;
+      isPaired?: boolean;
+      answerTimeLimit?: number;
+      isFrozen?: boolean;
+      pairedWith?: any[];
+    };
+  }>> {
+    try {
+      await this.validateMetadata();
+      
+      return Object.values(this.metadata.files).map(file => ({
+        fileId: file.id,
+        path: path.join(this.baseDir, file.relativePath),
+        uploadDate: file.uploadDate,
+        originalDate: file.originalDate,
+        originalFileName: file.originalFileName,
+        fileSize: file.fileSize,
+        lastModified: file.lastModified,
+        hash: file.hash,
+        metadata: {
+          ...file,
+          pairedWith: null
+        }
+      }));
+    } catch (error) {
+      console.error('获取基础信息列表失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取单个错题的预览图
+   */
+  async getPreview(fileId: string): Promise<string | null> {
+    try {
+      const metadata = this.metadata.files[fileId];
+      if (!metadata) {
+        throw new Error(`文件ID不存在: ${fileId}`);
+      }
+
+      const filePath = path.join(this.baseDir, metadata.relativePath);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`文件不存在: ${filePath}`);
+      }
+
+      const imageBuffer = await fs.promises.readFile(filePath);
+      return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+    } catch (error) {
+      console.error(`获取预览图失败 (fileId: ${fileId}):`, error);
+      return null;
+    }
+  }
 } 

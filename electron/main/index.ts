@@ -1707,3 +1707,36 @@ ipcMain.handle('setMultipleFrozen', async (event, fileIds: string[], isFrozen: b
     return { success: false, error: error.message }
   }
 })
+
+// 添加新的 IPC 处理器
+ipcMain.handle('get-basic-mistakes', async () => {
+  try {
+    const basicList = await metadataManager.getBasicMetadataList();
+    return {
+      success: true,
+      data: basicList
+    };
+  } catch (error) {
+    console.error('获取基础错题列表失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+ipcMain.handle('get-mistake-preview', async (_, fileId: string) => {
+  try {
+    const preview = await metadataManager.getPreview(fileId);
+    return {
+      success: true,
+      data: preview
+    };
+  } catch (error) {
+    console.error('获取预览图失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});

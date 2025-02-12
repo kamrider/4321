@@ -1773,3 +1773,30 @@ ipcMain.handle('setMultipleFrozen', async (event, fileIds: string[], isFrozen: b
     return { success: false, error: error.message }
   }
 })
+
+// 添加设置训练日期的处理器
+ipcMain.handle('metadata:set-next-training-date', async (_, fileId: string, nextTrainingDate: string) => {
+  try {
+    const metadata = await metadataManager.getMetadata()
+    const fileMetadata = metadata.files[fileId]
+    
+    if (!fileMetadata) {
+      throw new Error('文件不存在')
+    }
+
+    // 直接设置下次训练日期
+    fileMetadata.nextTrainingDate = nextTrainingDate
+    await metadataManager.saveMetadata()
+
+    return {
+      success: true,
+      data: fileMetadata
+    }
+  } catch (error) {
+    console.error('设置训练日期失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ElDropdown } from 'element-plus'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -64,6 +65,11 @@ const toggleAnswer = () => {
   showAnswer.value = !showAnswer.value
   console.log('切换答案显示:', showAnswer.value)
 }
+
+// 添加右键菜单状态
+const contextMenuVisible = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const contextMenuItem = ref<MistakeItem | null>(null)
 
 // 修改获取数据的过滤逻辑
 onMounted(async () => {
@@ -231,6 +237,69 @@ const handleDelete = async (item: MistakeItem) => {
     loading.value = false
   }
 }
+
+// 添加加入训练的方法
+const handleAddToTraining = async (item: MistakeItem) => {
+  try {
+    // 设置今天0点作为训练日期
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const result = await window.ipcRenderer.metadata.setNextTrainingDate(
+      item.fileId,
+      today.toISOString()
+    )
+    
+    if (result.success) {
+      // 更新本地状态
+      if (!item.metadata) {
+        item.metadata = {
+          proficiency: 0,
+          trainingInterval: 0,
+          lastTrainingDate: '',
+          nextTrainingDate: '',
+          subject: '',
+          tags: [],
+          notes: '',
+          trainingRecords: [],
+          answerTimeLimit: 300,
+          type: 'mistake'
+        }
+      }
+      
+      item.metadata.nextTrainingDate = today.toISOString()
+      ElMessage.success('已加入今天的训练')
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('加入训练失败:', error)
+    ElMessage.error('加入训练失败')
+  }
+}
+
+// 添加右键菜单处理函数
+const handleContextMenu = (e: MouseEvent, item: MistakeItem) => {
+  e.preventDefault()
+  contextMenuVisible.value = true
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  contextMenuItem.value = item
+}
+
+// 添加关闭右键菜单函数
+const closeContextMenu = () => {
+  contextMenuVisible.value = false
+  contextMenuItem.value = null
+}
+
+// 添加点击外部关闭右键菜单
+onMounted(() => {
+  document.addEventListener('click', closeContextMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu)
+})
 </script>
 
 <template>
@@ -280,7 +349,8 @@ const handleDelete = async (item: MistakeItem) => {
                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
                  'is-paired': item.metadata?.isPaired
                }"
-               @click="item.metadata?.isPaired ? handleViewDetail(item) : null">
+               @click="item.metadata?.isPaired ? handleViewDetail(item) : null"
+               @contextmenu="(e) => handleContextMenu(e, item)">
             <el-button
               class="delete-btn"
               type="danger"
@@ -380,6 +450,24 @@ const handleDelete = async (item: MistakeItem) => {
       </div>
     </div>
   </el-dialog>
+
+  <!-- 添加右键菜单 -->
+  <div v-if="contextMenuVisible" 
+       class="context-menu"
+       :style="{ 
+         left: contextMenuPosition.x + 'px', 
+         top: contextMenuPosition.y + 'px'
+       }">
+    <div class="context-menu-item"
+         :class="{ disabled: formatTrainingStatus(contextMenuItem?.metadata?.nextTrainingDate).status === 'today' }"
+         @click="contextMenuItem && handleAddToTraining(contextMenuItem)">
+      加入今天训练
+    </div>
+    <div class="context-menu-item danger"
+         @click="contextMenuItem && handleDelete(contextMenuItem)">
+      删除
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -699,5 +787,48 @@ const handleDelete = async (item: MistakeItem) => {
 
 .sort-controls .el-icon {
   margin-left: 4px;
+}
+
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 5px 0;
+  min-width: 150px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
+  z-index: 3000;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.context-menu-item:hover {
+  background-color: #f5f7fa;
+}
+
+.context-menu-item.disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.context-menu-item.disabled:hover {
+  background-color: transparent;
+}
+
+.context-menu-item.danger {
+  color: #f56c6c;
+  border-top: 1px solid #ebeef5;
+  margin-top: 5px;
+  padding-top: 8px;
+}
+
+.context-menu-item.danger:hover {
+  background-color: #fef0f0;
 }
 </style> 

@@ -161,6 +161,15 @@ export interface IpcRenderer {
     getTrainingHistory: () => Promise<Result<MistakeItem[]>>
   }
 
+  // metadata 相关方法
+  metadata: {
+    updateType: (fileId: string, type: 'mistake' | 'answer') => Promise<Result>
+    pairImages: (fileId1: string, fileId2: string) => Promise<Result>
+    unpairImages: (fileId1: string, fileId2: string) => Promise<Result>
+    updateDetails: (fileId: string, answerTimeLimit: number) => Promise<Result>
+    setNextTrainingDate: (fileId: string, nextTrainingDate: string) => Promise<Result>
+  }
+
   // 文件相关方法
   file: {
     export: (paths: string[]) => Promise<{
@@ -291,7 +300,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       ipcRenderer.invoke('metadata:unpair-images', fileId1, fileId2),
     // 添加 updateDetails 方法
     updateDetails: (fileId: string, answerTimeLimit: number) => 
-      ipcRenderer.invoke('metadata:update-details', fileId, answerTimeLimit)
+      ipcRenderer.invoke('metadata:update-details', fileId, answerTimeLimit),
+    setNextTrainingDate: (fileId: string, nextTrainingDate: string) =>
+      ipcRenderer.invoke('metadata:set-next-training-date', fileId, nextTrainingDate)
   },
 
   mistake: {

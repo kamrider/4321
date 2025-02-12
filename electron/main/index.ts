@@ -251,7 +251,7 @@ async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: st
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'Main window',
+    title: '错题训练',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,

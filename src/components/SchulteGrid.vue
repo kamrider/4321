@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
@@ -115,6 +115,11 @@ const formatTime = (time: number) => {
          seconds.toString().padStart(2, '0') + '.' + 
          ms.toString().padStart(2, '0')
 }
+
+// 添加自动开始游戏的逻辑
+onMounted(() => {
+  startGame()
+})
 </script>
 
 <style scoped>

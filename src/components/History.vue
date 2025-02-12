@@ -64,12 +64,12 @@ const isExportMode = ref(false)
 const selectedExportItems = ref<HistoryItem[]>([])
 
 // 在其他响应式变量声明后添加
-const isAttentionMode = ref(false)
+const isAttentionMode = ref(true)  // 修改为默认开启
 
 // 添加舒尔特方格相关的状态
 const showSchulteGrid = ref(false)
 const schulteGridSize = ref(5)
-const schulteTimeLimit = ref(300)
+const schulteTimeLimit = ref(20)  // 修改默认时间为20秒
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -103,12 +103,19 @@ const loadTimerState = (fileId: string) => {
   startTimer() // 加载状态后启动计时器
 }
 
-// 添加切换处理函数
+// 修改切换处理函数
 const handlePrevious = () => {
   if (isInExam.value) {
     if (currentExamIndex.value > 0) {
       currentExamIndex.value--
-      handleViewDetail(selectedExamItems.value[currentExamIndex.value])
+      const prevItem = selectedExamItems.value[currentExamIndex.value]
+      if (isAttentionMode.value) {
+        activeItem.value = prevItem // 先设置 activeItem
+        dialogVisible.value = false // 关闭当前题目
+        showSchulteGrid.value = true // 显示舒尔特方格
+      } else {
+        handleViewDetail(prevItem)
+      }
     }
   } else {
     if (currentIndex.value > 0) {
@@ -116,17 +123,24 @@ const handlePrevious = () => {
         saveCurrentTimerState()
       }
       currentIndex.value--
-      activeItem.value = sortedHistoryList.value[currentIndex.value]
-      loadTimerState(activeItem.value.fileId)
-      
-      // 重置状态
-      showAnswer.value = false
-      showAnswerButtons.value = false
-      
-      // 重新初始化倒计时
-      if (activeItem.value.metadata?.answerTimeLimit) {
-        countdown.value = activeItem.value.metadata.answerTimeLimit
-        startCountdown()
+      const prevItem = sortedHistoryList.value[currentIndex.value]
+      if (isAttentionMode.value) {
+        activeItem.value = prevItem // 先设置 activeItem
+        dialogVisible.value = false // 关闭当前题目
+        showSchulteGrid.value = true // 显示舒尔特方格
+      } else {
+        activeItem.value = prevItem
+        loadTimerState(prevItem.fileId)
+        
+        // 重置状态
+        showAnswer.value = false
+        showAnswerButtons.value = false
+        
+        // 重新初始化倒计时
+        if (prevItem.metadata?.answerTimeLimit) {
+          countdown.value = prevItem.metadata.answerTimeLimit
+          startCountdown()
+        }
       }
     }
   }
@@ -136,10 +150,13 @@ const handleNext = () => {
   if (isInExam.value) {
     if (currentExamIndex.value < selectedExamItems.value.length - 1) {
       currentExamIndex.value++
+      const nextItem = selectedExamItems.value[currentExamIndex.value]
       if (isAttentionMode.value) {
-        showSchulteGrid.value = true
+        activeItem.value = nextItem // 先设置 activeItem
+        dialogVisible.value = false // 关闭当前题目
+        showSchulteGrid.value = true // 显示舒尔特方格
       } else {
-        handleViewDetail(selectedExamItems.value[currentExamIndex.value])
+        handleViewDetail(nextItem)
       }
     }
   } else {
@@ -148,19 +165,22 @@ const handleNext = () => {
         saveCurrentTimerState()
       }
       currentIndex.value++
+      const nextItem = sortedHistoryList.value[currentIndex.value]
       if (isAttentionMode.value) {
-        showSchulteGrid.value = true
+        activeItem.value = nextItem // 先设置 activeItem
+        dialogVisible.value = false // 关闭当前题目
+        showSchulteGrid.value = true // 显示舒尔特方格
       } else {
-        activeItem.value = sortedHistoryList.value[currentIndex.value]
-        loadTimerState(activeItem.value.fileId)
+        activeItem.value = nextItem
+        loadTimerState(nextItem.fileId)
         
         // 重置状态
         showAnswer.value = false
         showAnswerButtons.value = false
         
         // 重新初始化倒计时
-        if (activeItem.value.metadata?.answerTimeLimit) {
-          countdown.value = activeItem.value.metadata.answerTimeLimit
+        if (nextItem.metadata?.answerTimeLimit) {
+          countdown.value = nextItem.metadata.answerTimeLimit
           startCountdown()
         }
       }
@@ -381,6 +401,7 @@ const handleViewDetail = async (item: HistoryItem) => {
 
   // 如果是注意力模式，先显示舒尔特方格
   if (isAttentionMode.value) {
+    activeItem.value = item // 先设置 activeItem
     showSchulteGrid.value = true
     return
   }
@@ -395,11 +416,12 @@ const showActualDetail = (item: HistoryItem) => {
   }
   currentIndex.value = sortedHistoryList.value.findIndex(i => i.fileId === item.fileId)
   activeItem.value = item
-  loadTimerState(item.fileId)
   dialogVisible.value = true
   showAnswer.value = false
   showAnswerButtons.value = false
   
+  // 恢复原来的计时方式，不管是否在注意力模式下都立即开始计时
+  loadTimerState(item.fileId)
   // 初始化倒计时
   if (item.metadata?.answerTimeLimit) {
     countdown.value = item.metadata.answerTimeLimit
@@ -947,12 +969,24 @@ const toggleAttentionMode = () => {
   ElMessage.success(isAttentionMode.value ? '已开启注意力模式' : '已关闭注意力模式')
 }
 
-// 添加舒尔特方格完成的处理函数
+// 修改舒尔特方格完成的处理函数
 const handleSchulteComplete = (time: number) => {
-  showSchulteGrid.value = false
-  ElMessage.success(`舒尔特方格完成！用时：${time/1000}秒`)
+  const timeInSeconds = time / 1000
   
-  // 显示实际的题目详情
+  if (timeInSeconds > schulteTimeLimit.value) {
+    ElMessage.warning(`用时 ${timeInSeconds.toFixed(1)} 秒，超过了 ${schulteTimeLimit.value} 秒的限制，需要重新训练！`)
+    // 短暂延迟后重新显示舒尔特方格
+    setTimeout(() => {
+      showSchulteGrid.value = true
+    }, 1500)
+    return
+  }
+  
+  // 合格后才显示实际题目
+  showSchulteGrid.value = false
+  ElMessage.success(`舒尔特方格完成！用时：${timeInSeconds.toFixed(1)}秒，成绩合格！`)
+  
+  // 显示实际的题目详情并开始计时
   if (activeItem.value) {
     showActualDetail(activeItem.value)
   }
@@ -985,17 +1019,34 @@ const handleSchulteComplete = (time: number) => {
           </el-button>
         </el-button-group>
 
-        <!-- 添加注意力模式切换按钮 -->
-        <el-button
-          :type="isAttentionMode ? 'success' : 'default'"
-          @click="toggleAttentionMode"
-          class="attention-mode-btn"
-        >
-          <template #icon>
-            <el-icon><Bell /></el-icon>
-          </template>
-          注意力模式{{ isAttentionMode ? '已开启' : '' }}
-        </el-button>
+        <div class="attention-mode-controls">
+          <el-button
+            :type="isAttentionMode ? 'success' : 'default'"
+            @click="toggleAttentionMode"
+            class="attention-mode-btn"
+          >
+            <template #icon>
+              <el-icon><Bell /></el-icon>
+            </template>
+            注意力模式{{ isAttentionMode ? '已开启' : '' }}
+          </el-button>
+          
+          <el-input-number 
+            v-model="schulteTimeLimit"
+            :min="1"
+            :max="60"
+            :step="1"
+            size="small"
+            class="time-limit-input"
+          >
+            <template #prefix>
+              合格时间：
+            </template>
+            <template #suffix>
+              秒
+            </template>
+          </el-input-number>
+        </div>
       </div>
       
       <div class="header-actions">
@@ -1878,5 +1929,20 @@ const handleSchulteComplete = (time: number) => {
 
 .attention-mode-btn:hover {
   transform: scale(1.05);
+}
+
+.attention-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-limit-input {
+  width: 180px;
+}
+
+.time-limit-input :deep(.el-input-number__prefix),
+.time-limit-input :deep(.el-input-number__suffix) {
+  color: var(--el-text-color-regular);
 }
 </style> 

@@ -1061,24 +1061,6 @@ const cancelExportMode = () => {
                   </span>
                 </p>
               </div>
-              <div class="training-actions">
-                <el-button 
-                  type="success" 
-                  size="small"
-                  :disabled="formatTrainingStatus(item.metadata.nextTrainingDate).status === 'pending'"
-                  @click="handleRemembered(item, true)"
-                >
-                  记住了
-                </el-button>
-                <el-button 
-                  type="danger" 
-                  size="small"
-                  :disabled="formatTrainingStatus(item.metadata.nextTrainingDate).status === 'pending'"
-                  @click="handleRemembered(item, false)"
-                >
-                  没记住
-                </el-button>
-              </div>
             </div>
           </div>
         </div>

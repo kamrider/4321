@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
+import SchulteGrid from './SchulteGrid.vue'
 
 const historyList = ref<HistoryItem[]>([])
 const loading = ref(true)
@@ -61,6 +62,14 @@ const existingTags = ref<string[]>([])
 // 添加导出模式相关的状态
 const isExportMode = ref(false)
 const selectedExportItems = ref<HistoryItem[]>([])
+
+// 在其他响应式变量声明后添加
+const isAttentionMode = ref(false)
+
+// 添加舒尔特方格相关的状态
+const showSchulteGrid = ref(false)
+const schulteGridSize = ref(5)
+const schulteTimeLimit = ref(300)
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -127,7 +136,11 @@ const handleNext = () => {
   if (isInExam.value) {
     if (currentExamIndex.value < selectedExamItems.value.length - 1) {
       currentExamIndex.value++
-      handleViewDetail(selectedExamItems.value[currentExamIndex.value])
+      if (isAttentionMode.value) {
+        showSchulteGrid.value = true
+      } else {
+        handleViewDetail(selectedExamItems.value[currentExamIndex.value])
+      }
     }
   } else {
     if (currentIndex.value < sortedHistoryList.value.length - 1) {
@@ -135,17 +148,21 @@ const handleNext = () => {
         saveCurrentTimerState()
       }
       currentIndex.value++
-      activeItem.value = sortedHistoryList.value[currentIndex.value]
-      loadTimerState(activeItem.value.fileId)
-      
-      // 重置状态
-      showAnswer.value = false
-      showAnswerButtons.value = false
-      
-      // 重新初始化倒计时
-      if (activeItem.value.metadata?.answerTimeLimit) {
-        countdown.value = activeItem.value.metadata.answerTimeLimit
-        startCountdown()
+      if (isAttentionMode.value) {
+        showSchulteGrid.value = true
+      } else {
+        activeItem.value = sortedHistoryList.value[currentIndex.value]
+        loadTimerState(activeItem.value.fileId)
+        
+        // 重置状态
+        showAnswer.value = false
+        showAnswerButtons.value = false
+        
+        // 重新初始化倒计时
+        if (activeItem.value.metadata?.answerTimeLimit) {
+          countdown.value = activeItem.value.metadata.answerTimeLimit
+          startCountdown()
+        }
       }
     }
   }
@@ -355,13 +372,24 @@ const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
 }
 
 // 修改查看详情处理函数
-const handleViewDetail = (item: HistoryItem) => {
+const handleViewDetail = async (item: HistoryItem) => {
   // 检查是否被冻结
   if (item.metadata?.isFrozen) {
     ElMessage.warning('该项目已被冻结，无法训练')
     return
   }
 
+  // 如果是注意力模式，先显示舒尔特方格
+  if (isAttentionMode.value) {
+    showSchulteGrid.value = true
+    return
+  }
+
+  showActualDetail(item)
+}
+
+// 添加显示实际详情的函数
+const showActualDetail = (item: HistoryItem) => {
   if (activeItem.value) {
     saveCurrentTimerState()
   }
@@ -912,6 +940,23 @@ const cancelExportMode = () => {
   isExportMode.value = false
   selectedExportItems.value = []
 }
+
+// 添加切换注意力模式的方法
+const toggleAttentionMode = () => {
+  isAttentionMode.value = !isAttentionMode.value
+  ElMessage.success(isAttentionMode.value ? '已开启注意力模式' : '已关闭注意力模式')
+}
+
+// 添加舒尔特方格完成的处理函数
+const handleSchulteComplete = (time: number) => {
+  showSchulteGrid.value = false
+  ElMessage.success(`舒尔特方格完成！用时：${time/1000}秒`)
+  
+  // 显示实际的题目详情
+  if (activeItem.value) {
+    showActualDetail(activeItem.value)
+  }
+}
 </script>
 
 <template>
@@ -939,6 +984,18 @@ const cancelExportMode = () => {
             </el-icon>
           </el-button>
         </el-button-group>
+
+        <!-- 添加注意力模式切换按钮 -->
+        <el-button
+          :type="isAttentionMode ? 'success' : 'default'"
+          @click="toggleAttentionMode"
+          class="attention-mode-btn"
+        >
+          <template #icon>
+            <el-icon><Bell /></el-icon>
+          </template>
+          注意力模式{{ isAttentionMode ? '已开启' : '' }}
+        </el-button>
       </div>
       
       <div class="header-actions">
@@ -1304,6 +1361,22 @@ const cancelExportMode = () => {
         </el-button>
       </span>
     </template>
+  </el-dialog>
+
+  <!-- 添加舒尔特方格弹窗 -->
+  <el-dialog
+    v-model="showSchulteGrid"
+    title="注意力训练 - 舒尔特方格"
+    width="80%"
+    :close-on-click-modal="false"
+    :show-close="false"
+    destroy-on-close
+  >
+    <schulte-grid
+      :grid-size="schulteGridSize"
+      :time-limit="schulteTimeLimit"
+      @complete="handleSchulteComplete"
+    />
   </el-dialog>
 </template>
 
@@ -1796,5 +1869,14 @@ const cancelExportMode = () => {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
+}
+
+.attention-mode-btn {
+  margin-left: 16px;
+  transition: all 0.3s ease;
+}
+
+.attention-mode-btn:hover {
+  transform: scale(1.05);
 }
 </style> 

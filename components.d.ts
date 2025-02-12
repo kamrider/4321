@@ -39,6 +39,7 @@ declare module 'vue' {
     PairMistake: typeof import('./src/components/PairMistake.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SchulteGrid: typeof import('./src/components/SchulteGrid.vue')['default']
     Settings: typeof import('./src/components/Settings.vue')['default']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
     Training: typeof import('./src/components/Training.vue')['default']

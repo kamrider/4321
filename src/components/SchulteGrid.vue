@@ -101,8 +101,16 @@ const endGame = () => {
     clearInterval(timerInterval.value)
   }
   isPlaying.value = false
-  emit('complete', timer.value)
-  ElMessage.success('恭喜完成！用时：' + formatTime(timer.value))
+  const timeInSeconds = timer.value / 100 // 转换为秒
+  const limitInSeconds = props.timeLimit || 16 // 使用传入的时间限制，默认16秒
+  
+  if (timeInSeconds <= limitInSeconds) {
+    emit('complete', timer.value)
+    ElMessage.success(`恭喜完成！用时：${formatTime(timer.value)}，成绩合格！`)
+  } else {
+    emit('complete', timer.value)
+    ElMessage.warning(`用时：${formatTime(timer.value)}，超过${limitInSeconds}秒，继续加油！`)
+  }
 }
 
 // 格式化时间显示

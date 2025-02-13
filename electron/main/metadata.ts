@@ -353,12 +353,24 @@ export class MetadataManager {
       await this.createMember('default')
     }
 
-    // 如果没有当前成员，设置为第一个成员
-    if (!this.currentMember) {
-      const members = await this.getMembers()
-      if (members.length > 0) {
-        await this.switchMember(members[0])
+    // 尝试读取上次使用的成员
+    const currentMemberPath = path.join(this.membersDir, 'current.txt')
+    try {
+      if (fs.existsSync(currentMemberPath)) {
+        const lastMember = await fs.promises.readFile(currentMemberPath, 'utf-8')
+        // 确保上次使用的成员仍然存在
+        if (members.includes(lastMember)) {
+          await this.switchMember(lastMember)
+          return
+        }
       }
+    } catch (error) {
+      console.error('读取上次使用的成员失败:', error)
+    }
+
+    // 如果没有找到上次使用的成员或出错，则使用第一个可用成员
+    if (!this.currentMember && members.length > 0) {
+      await this.switchMember(members[0])
     }
   }
 

@@ -1090,9 +1090,6 @@ const handleSchulteComplete = (time: number) => {
         </div>
         
         <div class="exam-mode-controls">
-          <el-button type="primary" @click="exportHistory" :loading="loading">
-            导出训练历史
-          </el-button>
           <el-button 
             type="primary" 
             @click="toggleExamMode"

@@ -3,6 +3,27 @@
     <div class="header">
       <h2>成员管理</h2>
       <div class="header-right">
+        <el-button-group class="sort-controls">
+          <el-button 
+            :type="sortType === 'name' ? 'primary' : 'default'"
+            @click="handleSort('name')"
+          >
+            名称
+            <el-icon v-if="sortType === 'name'">
+              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+            </el-icon>
+          </el-button>
+          <el-button 
+            :type="sortType === 'lastUsed' ? 'primary' : 'default'"
+            @click="handleSort('lastUsed')"
+          >
+            最近使用
+            <el-icon v-if="sortType === 'lastUsed'">
+              <component :is="sortOrder === 'desc' ? 'ArrowDown' : 'ArrowUp'" />
+            </el-icon>
+          </el-button>
+        </el-button-group>
+
         <el-input
           v-model="searchKeyword"
           placeholder="搜索成员"
@@ -97,7 +118,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Check, Delete } from '@element-plus/icons-vue'
+import { Plus, Check, Delete, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 const members = ref<string[]>([])
 const currentMember = ref<string | null>(null)
@@ -111,12 +132,40 @@ const searchKeyword = ref('')
 const isSelectMode = ref(false)
 const selectedMembers = ref<string[]>([])
 
+// 添加排序相关的响应式变量
+const sortType = ref<'name' | 'lastUsed'>('name')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+const lastUsedTime = ref<Map<string, number>>(new Map())
+
 const filteredMembers = computed(() => {
-  if (!searchKeyword.value) return members.value
-  const keyword = searchKeyword.value.toLowerCase()
-  return members.value.filter(member => 
-    member.toLowerCase().includes(keyword)
-  )
+  let result = [...members.value]
+  
+  // 关键字筛选
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    result = result.filter(member => 
+      member.toLowerCase().includes(keyword)
+    )
+  }
+  
+  // 排序
+  result.sort((a, b) => {
+    const factor = sortOrder.value === 'desc' ? -1 : 1
+    
+    if (sortType.value === 'name') {
+      return factor * a.localeCompare(b)
+    } else {
+      // 最近使用时间排序，当前使用的成员始终排在最前面
+      if (a === currentMember.value) return -1 * factor
+      if (b === currentMember.value) return 1 * factor
+      
+      const timeA = lastUsedTime.value.get(a) || 0
+      const timeB = lastUsedTime.value.get(b) || 0
+      return factor * (timeB - timeA)
+    }
+  })
+  
+  return result
 })
 
 const selectedCount = computed(() => selectedMembers.value.length)
@@ -216,6 +265,10 @@ const loadCurrentMember = async () => {
 onMounted(async () => {
   try {
     await Promise.all([loadMembers(), loadCurrentMember()])
+    // 初始化当前成员的最后使用时间
+    if (currentMember.value) {
+      lastUsedTime.value.set(currentMember.value, Date.now())
+    }
   } finally {
     loading.value = false
   }
@@ -247,13 +300,27 @@ const handleAdd = async () => {
   }
 }
 
-// 切换成员
+// 添加排序处理函数
+const handleSort = (type: 'name' | 'lastUsed') => {
+  if (sortType.value === type) {
+    // 如果点击相同类型，切换排序顺序
+    sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+  } else {
+    // 如果点击不同类型，设置新类型并默认升序
+    sortType.value = type
+    sortOrder.value = 'asc'
+  }
+}
+
+// 修改切换成员函数，添加最近使用时间记录
 const handleSwitch = async (memberName: string) => {
   try {
     const result = await window.ipcRenderer.invoke('member:switch', memberName)
     if (result.success) {
       ElMessage.success('切换成功')
       currentMember.value = memberName
+      // 记录最后使用时间
+      lastUsedTime.value.set(memberName, Date.now())
     } else {
       ElMessage.error(result.message || '切换失败')
     }
@@ -371,5 +438,15 @@ const handleSwitch = async (memberName: string) => {
 .is-active {
   background-color: var(--el-color-danger);
   border-color: var(--el-color-danger);
+}
+
+.sort-controls {
+  margin-right: 16px;
+}
+
+.sort-controls .el-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style> 

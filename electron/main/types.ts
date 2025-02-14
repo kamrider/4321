@@ -6,6 +6,11 @@ interface TrainingRecord {
   intervalAfter: number       // 训练后设定的下次间隔
   isOnTime: boolean          // 是否按时训练
   answerTime?: number         // 实际答题时间（毫秒）
+  trace?: {                  // 做题痕迹图片信息
+    id: string              // 痕迹图片的唯一标识
+    relativePath: string    // 图片相对路径
+    originalFileName: string // 原始文件名
+  }
 }
 
 interface FileMetadata {

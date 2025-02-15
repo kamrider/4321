@@ -179,8 +179,11 @@ const handleTrainingResult = async (remembered: boolean) => {
             <div class="mistakes-grid">
               <div v-for="mistake in item.mistakes"
                    :key="mistake.path"
-                   class="mistake-item"
+                   :class="['mistake-item', mistake.metadata?.proficiency === 0 ? 'zero-proficiency-item' : '']"
                    @click="handleViewDetail(mistake)">
+                <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
+                  需加强
+                </div>
                 <el-image 
                   :src="mistake.preview"
                   fit="contain"
@@ -331,6 +334,8 @@ const handleTrainingResult = async (remembered: boolean) => {
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s;
+  padding: 4px;
+  border: 2px solid transparent;
 }
 
 .mistake-item:hover {
@@ -432,5 +437,26 @@ const handleTrainingResult = async (remembered: boolean) => {
 .zero-proficiency {
   color: #f56c6c;
   font-weight: bold;
+}
+
+.zero-proficiency-item {
+  border: 2px solid #f56c6c !important;
+  box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
+}
+
+.zero-proficiency-item:hover {
+  box-shadow: 0 0 12px rgba(245, 108, 108, 0.5) !important;
+}
+
+.warning-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: #f56c6c;
+  color: white;
+  padding: 4px 8px;
+  border-bottom-left-radius: 4px;
+  font-size: 12px;
+  z-index: 1;
 }
 </style> 

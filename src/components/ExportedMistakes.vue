@@ -257,7 +257,7 @@ const handleTrainingResult = async (remembered: boolean) => {
         />
       </div>
       
-      <div class="training-control" v-if="isTraining && !showAnswer">
+      <div class="training-control" v-if="isTraining">
         <el-button-group>
           <el-button 
             type="success" 

@@ -198,7 +198,7 @@ const handleTrainingResult = async (remembered: boolean) => {
                 </div>
 
                 <div class="mistake-info" v-if="mistake.metadata">
-                  <div class="proficiency">
+                  <div class="proficiency" :class="{ 'zero-proficiency': mistake.metadata.proficiency === 0 }">
                     熟练度: {{ mistake.metadata.proficiency }}
                   </div>
                   <div class="next-training">
@@ -427,5 +427,10 @@ const handleTrainingResult = async (remembered: boolean) => {
   color: #909399;
   font-size: 14px;
   text-align: center;
+}
+
+.zero-proficiency {
+  color: #f56c6c;
+  font-weight: bold;
 }
 </style> 

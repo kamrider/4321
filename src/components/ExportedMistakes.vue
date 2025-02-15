@@ -34,6 +34,31 @@ const showAnswer = ref(false)
 // 添加训练相关的状态
 const isTraining = ref(false)
 
+// 添加计算属性来对列表进行排序
+const sortedExportedList = computed(() => {
+  return exportedList.value.map(item => {
+    // 对每天的错题进行排序
+    const sortedMistakes = [...item.mistakes].sort((a, b) => {
+      // 从文件路径中提取序号
+      const getNumber = (path: string) => {
+        const match = path.match(/错题(\d+)\./);
+        return match ? parseInt(match[1]) : 0;
+      };
+      return getNumber(a.path) - getNumber(b.path);
+    });
+    
+    return {
+      ...item,
+      mistakes: sortedMistakes
+    };
+  }).sort((a, b) => {
+    // 日期文件夹按照时间降序排序
+    const dateA = new Date(a.date.replace(/-/g, '/')).getTime();
+    const dateB = new Date(b.date.replace(/-/g, '/')).getTime();
+    return dateB - dateA;
+  });
+});
+
 // 添加计算属性来判断是否可以训练
 const canTrain = computed(() => {
   if (!activeItem.value?.metadata?.nextTrainingDate) {
@@ -159,7 +184,7 @@ const handleTrainingResult = async (remembered: boolean) => {
     <el-skeleton :loading="loading" animated :count="4" v-else>
       <template #default>
         <div class="export-list">
-          <div v-for="item in exportedList" 
+          <div v-for="item in sortedExportedList" 
                :key="item.date" 
                class="export-item">
             <div class="export-header">

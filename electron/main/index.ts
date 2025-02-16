@@ -10,6 +10,7 @@ import { TrainingManager } from './training-manager'
 import type { TrainingConfig } from './training-manager'
 import { v4 as uuidv4 } from 'uuid'
 import { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer } from 'docx'
+import sharp from 'sharp'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -97,6 +98,9 @@ const getExportBaseDir = () => {
 // 添加临时目录配置
 const getTempDirectory = () => path.join(targetDirectory, 'temp')
 
+// 添加预览图目录配置
+const getPreviewDir = () => path.join(targetDirectory, 'previews')
+
 // 检查路径是否存在且可写
 try {
   // 确保主目录存在
@@ -111,6 +115,11 @@ try {
     fs.mkdirSync(tempDirectory, { recursive: true })
   }
   fs.accessSync(tempDirectory, fs.constants.W_OK)
+
+  // 确保预览图目录存在
+  if (!fs.existsSync(getPreviewDir())) {
+    fs.mkdirSync(getPreviewDir(), { recursive: true })
+  }
 } catch (error) {
   console.error('存储路径不可用，使用默认路径:', error)
   targetDirectory = DEFAULT_STORAGE_PATH
@@ -146,6 +155,53 @@ let metadataManager = new MetadataManager(targetDirectory)
 
 // 初始化训练管理器
 const trainingManager = new TrainingManager(configPath)
+
+// 生成预览图的函数
+async function generatePreview(sourceFilePath: string, fileId: string): Promise<string> {
+  const previewPath = path.join(getPreviewDir(), `${fileId}.webp`)
+  
+  try {
+    // 获取原始图片的元数据
+    const metadata = await sharp(sourceFilePath).metadata()
+    
+    // 根据原始图片大小计算合适的预览图尺寸
+    let targetWidth = metadata.width || 0
+    let targetHeight = metadata.height || 0
+    
+    // 设置最大尺寸限制
+    const MAX_SIZE = 1200
+    const MIN_SIZE = 300
+    
+    if (targetWidth > MAX_SIZE || targetHeight > MAX_SIZE) {
+      // 如果图片太大，等比例缩小
+      const ratio = Math.min(MAX_SIZE / targetWidth, MAX_SIZE / targetHeight)
+      targetWidth = Math.round(targetWidth * ratio)
+      targetHeight = Math.round(targetHeight * ratio)
+    } else if (targetWidth < MIN_SIZE && targetHeight < MIN_SIZE) {
+      // 如果图片太小，等比例放大到最小尺寸
+      const ratio = Math.max(MIN_SIZE / targetWidth, MIN_SIZE / targetHeight)
+      targetWidth = Math.round(targetWidth * ratio)
+      targetHeight = Math.round(targetHeight * ratio)
+    }
+
+    // 生成预览图
+    await sharp(sourceFilePath)
+      .resize(targetWidth, targetHeight, {
+        fit: 'inside',
+        withoutEnlargement: false  // 允许放大小图片
+      })
+      .webp({ 
+        quality: 85,  // 提高到最高质量
+        effort: 4     // 保持压缩效果和速度的平衡点
+      })
+      .toFile(previewPath)
+    
+    return previewPath
+  } catch (error) {
+    console.error('生成预览图失败:', error)
+    throw error
+  }
+}
 
 // 修改上传单个文件的函数
 async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: string) {
@@ -210,6 +266,14 @@ async function uploadSingleFile(event: Electron.IpcMainInvokeEvent, filePath: st
     // 删除临时文件
     await fs.promises.unlink(tempPath)
     
+    // 生成预览图
+    const previewPath = await generatePreview(targetPath, fileId)
+    
+    // 更新元数据，添加预览图路径
+    await metadataManager.updateFile(fileId, {
+      previewPath: path.relative(targetDirectory, previewPath)
+    })
+
     // 发送完成状态
     event.sender.send('file:progress', {
       filePath,
@@ -463,6 +527,14 @@ ipcMain.handle('file:upload', async (event, tempPaths) => {
         // 删除临时文件
         await fs.promises.unlink(tempPath);
         
+        // 生成预览图
+        const previewPath = await generatePreview(targetPath, fileId);
+        
+        // 更新元数据，添加预览图路径
+        await metadataManager.updateFile(fileId, {
+          previewPath: path.relative(targetDirectory, previewPath)
+        });
+
         // 发送完成状态
         event.sender.send('file:progress', {
           filePath: tempPath,
@@ -593,14 +665,41 @@ ipcMain.handle('file:get-mistakes', async () => {
     for (const [id, file] of allFiles) {
       try {
         const filePath = path.join(currentDir, file.relativePath)
-        const fileData = await fs.promises.readFile(filePath)
-        const fileExtension = path.extname(filePath).toLowerCase().slice(1)
-        const base64Data = fileData.toString('base64')
+        let preview = ''
+        
+        // 获取预览图
+        if (file.previewPath) {
+          const previewPath = path.join(targetDirectory, file.previewPath)
+          if (fs.existsSync(previewPath)) {
+            const previewData = await fs.promises.readFile(previewPath)
+            preview = `data:image/webp;base64,${previewData.toString('base64')}`
+          } else {
+            // 如果预览图不存在，重新生成
+            const newPreviewPath = await generatePreview(filePath, id)
+            const previewData = await fs.promises.readFile(newPreviewPath)
+            preview = `data:image/webp;base64,${previewData.toString('base64')}`
+            
+            // 更新元数据中的预览图路径
+            await metadataManager.updateFile(id, {
+              previewPath: path.relative(targetDirectory, newPreviewPath)
+            })
+          }
+        } else {
+          // 如果没有预览图，生成一个
+          const newPreviewPath = await generatePreview(filePath, id)
+          const previewData = await fs.promises.readFile(newPreviewPath)
+          preview = `data:image/webp;base64,${previewData.toString('base64')}`
+          
+          // 更新元数据中的预览图路径
+          await metadataManager.updateFile(id, {
+            previewPath: path.relative(targetDirectory, newPreviewPath)
+          })
+        }
         
         fileMap.set(id, {
           fileId: id,
           path: filePath,
-          preview: `data:image/${fileExtension};base64,${base64Data}`,
+          preview,
           uploadDate: file.uploadDate,
           originalDate: file.originalDate,
           originalFileName: file.originalFileName,
@@ -1288,6 +1387,14 @@ ipcMain.handle('file:delete', async (event, fileId: string) => {
 
     // 保存更新后的元数据
     await metadataManager.saveMetadata()
+
+    // 在删除文件时也要删除预览图
+    if (fileMetadata?.previewPath) {
+      const previewPath = path.join(targetDirectory, fileMetadata.previewPath)
+      if (fs.existsSync(previewPath)) {
+        await fs.promises.unlink(previewPath)
+      }
+    }
 
     return {
       success: true

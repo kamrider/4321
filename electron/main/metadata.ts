@@ -514,4 +514,15 @@ export class MetadataManager {
     await this.saveMetadata()
     return success
   }
+
+  // 添加更新文件方法
+  async updateFile(fileId: string, updates: Partial<FileMetadata>) {
+    const metadata = await this.getMetadata();
+    if (metadata.files[fileId]) {
+      Object.assign(metadata.files[fileId], updates);
+      await this.saveMetadata();
+      return true;
+    }
+    return false;
+  }
 } 

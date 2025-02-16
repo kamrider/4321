@@ -37,6 +37,7 @@ interface FileMetadata {
   isPaired?: boolean           // 是否已配对
   answerTimeLimit?: number     // 答题时限（秒）
   isFrozen?: boolean           // 是否被冻结（例如：已导出但未完成训练）
+  previewPath?: string;  // 预览图的相对路径
 }
 
 interface MetadataStore {

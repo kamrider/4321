@@ -1027,14 +1027,41 @@ ipcMain.handle('file:get-training-history', async () => {
         // 只添加今天需要训练或已经逾期的错题
         if (nextTrainingDate <= today) {
           const filePath = path.join(currentDir, file.relativePath)
-          const fileData = await fs.promises.readFile(filePath)
-          const fileExtension = path.extname(filePath).toLowerCase().slice(1)
-          const base64Data = fileData.toString('base64')
+          let preview = ''
+          
+          // 获取预览图
+          if (file.previewPath) {
+            const previewPath = path.join(currentDir, file.previewPath)
+            if (fs.existsSync(previewPath)) {
+              const previewData = await fs.promises.readFile(previewPath)
+              preview = `data:image/webp;base64,${previewData.toString('base64')}`
+            } else {
+              // 如果预览图不存在，重新生成
+              const newPreviewPath = await generatePreview(filePath, id)
+              const previewData = await fs.promises.readFile(newPreviewPath)
+              preview = `data:image/webp;base64,${previewData.toString('base64')}`
+              
+              // 更新元数据中的预览图路径
+              await metadataManager.updateFile(id, {
+                previewPath: path.relative(currentDir, newPreviewPath)
+              })
+            }
+          } else {
+            // 如果没有预览图，生成一个
+            const newPreviewPath = await generatePreview(filePath, id)
+            const previewData = await fs.promises.readFile(newPreviewPath)
+            preview = `data:image/webp;base64,${previewData.toString('base64')}`
+            
+            // 更新元数据中的预览图路径
+            await metadataManager.updateFile(id, {
+              previewPath: path.relative(currentDir, newPreviewPath)
+            })
+          }
           
           fileMap.set(id, {
             fileId: id,
             path: filePath,
-            preview: `data:image/${fileExtension};base64,${base64Data}`,
+            preview,
             uploadDate: file.uploadDate,
             originalDate: file.originalDate,
             originalFileName: file.originalFileName,
@@ -1063,14 +1090,41 @@ ipcMain.handle('file:get-training-history', async () => {
           if (answerFile.type === 'answer' && answerFile.pairId === file.pairId) {
             try {
               const answerPath = path.join(currentDir, answerFile.relativePath)
-              const answerData = await fs.promises.readFile(answerPath)
-              const answerExtension = path.extname(answerPath).toLowerCase().slice(1)
-              const answerBase64 = answerData.toString('base64')
+              let answerPreview = ''
+              
+              // 获取答案的预览图
+              if (answerFile.previewPath) {
+                const previewPath = path.join(currentDir, answerFile.previewPath)
+                if (fs.existsSync(previewPath)) {
+                  const previewData = await fs.promises.readFile(previewPath)
+                  answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+                } else {
+                  // 如果预览图不存在，重新生成
+                  const newPreviewPath = await generatePreview(answerPath, answerId)
+                  const previewData = await fs.promises.readFile(newPreviewPath)
+                  answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+                  
+                  // 更新元数据中的预览图路径
+                  await metadataManager.updateFile(answerId, {
+                    previewPath: path.relative(currentDir, newPreviewPath)
+                  })
+                }
+              } else {
+                // 如果没有预览图，生成一个
+                const newPreviewPath = await generatePreview(answerPath, answerId)
+                const previewData = await fs.promises.readFile(newPreviewPath)
+                answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+                
+                // 更新元数据中的预览图路径
+                await metadataManager.updateFile(answerId, {
+                  previewPath: path.relative(currentDir, newPreviewPath)
+                })
+              }
 
               pairedAnswers.push({
                 fileId: answerId,
                 path: answerPath,
-                preview: `data:image/${answerExtension};base64,${answerBase64}`,
+                preview: answerPreview,
                 uploadDate: answerFile.uploadDate,
                 originalDate: answerFile.originalDate,
                 originalFileName: answerFile.originalFileName,

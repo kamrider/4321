@@ -99,7 +99,10 @@ const getExportBaseDir = () => {
 const getTempDirectory = () => path.join(targetDirectory, 'temp')
 
 // 添加预览图目录配置
-const getPreviewDir = () => path.join(targetDirectory, 'previews')
+const getPreviewDir = () => {
+  const currentMemberDir = metadataManager.getCurrentMemberDir()
+  return path.join(currentMemberDir, 'previews')
+}
 
 // 检查路径是否存在且可写
 try {
@@ -158,7 +161,12 @@ const trainingManager = new TrainingManager(configPath)
 
 // 生成预览图的函数
 async function generatePreview(sourceFilePath: string, fileId: string): Promise<string> {
-  const previewPath = path.join(getPreviewDir(), `${fileId}.webp`)
+  const previewDir = getPreviewDir()
+  // 确保预览图目录存在
+  if (!fs.existsSync(previewDir)) {
+    fs.mkdirSync(previewDir, { recursive: true })
+  }
+  const previewPath = path.join(previewDir, `${fileId}.webp`)
   
   try {
     // 获取原始图片的元数据
@@ -669,7 +677,7 @@ ipcMain.handle('file:get-mistakes', async () => {
         
         // 获取预览图
         if (file.previewPath) {
-          const previewPath = path.join(targetDirectory, file.previewPath)
+          const previewPath = path.join(currentDir, file.previewPath)
           if (fs.existsSync(previewPath)) {
             const previewData = await fs.promises.readFile(previewPath)
             preview = `data:image/webp;base64,${previewData.toString('base64')}`
@@ -681,7 +689,7 @@ ipcMain.handle('file:get-mistakes', async () => {
             
             // 更新元数据中的预览图路径
             await metadataManager.updateFile(id, {
-              previewPath: path.relative(targetDirectory, newPreviewPath)
+              previewPath: path.relative(currentDir, newPreviewPath)
             })
           }
         } else {
@@ -692,7 +700,7 @@ ipcMain.handle('file:get-mistakes', async () => {
           
           // 更新元数据中的预览图路径
           await metadataManager.updateFile(id, {
-            previewPath: path.relative(targetDirectory, newPreviewPath)
+            previewPath: path.relative(currentDir, newPreviewPath)
           })
         }
         

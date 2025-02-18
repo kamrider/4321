@@ -653,8 +653,8 @@ ipcMain.handle('file:get-metadata', () => {
 ipcMain.handle('file:get-mistakes', async () => {
   try {
     // 检查当前成员目录是否存在
-    const currentDir = path.join(metadataManager.getCurrentMemberDir())
-    if (!fs.existsSync(currentDir)) {
+    const currentMemberDir = metadataManager.getCurrentMemberDir()
+    if (!fs.existsSync(currentMemberDir)) {
       return {
         success: false,
         data: [],
@@ -672,12 +672,12 @@ ipcMain.handle('file:get-mistakes', async () => {
     // 处理所有文件
     for (const [id, file] of allFiles) {
       try {
-        const filePath = path.join(currentDir, file.relativePath)
+        const filePath = path.join(currentMemberDir, file.relativePath)
         let preview = ''
         
         // 获取预览图
         if (file.previewPath) {
-          const previewPath = path.join(currentDir, file.previewPath)
+          const previewPath = path.join(currentMemberDir, file.previewPath)
           if (fs.existsSync(previewPath)) {
             const previewData = await fs.promises.readFile(previewPath)
             preview = `data:image/webp;base64,${previewData.toString('base64')}`
@@ -689,7 +689,7 @@ ipcMain.handle('file:get-mistakes', async () => {
             
             // 更新元数据中的预览图路径
             await metadataManager.updateFile(id, {
-              previewPath: path.relative(currentDir, newPreviewPath)
+              previewPath: path.relative(currentMemberDir, newPreviewPath)
             })
           }
         } else {
@@ -700,7 +700,7 @@ ipcMain.handle('file:get-mistakes', async () => {
           
           // 更新元数据中的预览图路径
           await metadataManager.updateFile(id, {
-            previewPath: path.relative(currentDir, newPreviewPath)
+            previewPath: path.relative(currentMemberDir, newPreviewPath)
           })
         }
         
@@ -1595,7 +1595,8 @@ ipcMain.handle('file:export-mistake', async (_, params: {
 // 添加获取错题详情的处理函数
 ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
   try {
-    const currentDir = path.join(metadataManager.getCurrentMemberDir())
+    const currentMemberDir = metadataManager.getCurrentMemberDir()
+    const filesDir = path.join(currentMemberDir, 'files')
     const metadata = await metadataManager.getMetadata()
     const file = metadata.files[fileId]
     
@@ -1603,7 +1604,7 @@ ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
       return { success: false, error: '文件不存在' }
     }
 
-    const filePath = path.join(currentDir, file.relativePath)
+    const filePath = path.join(filesDir, file.relativePath)
     const fileData = await fs.promises.readFile(filePath)
     const fileExtension = path.extname(filePath).toLowerCase().slice(1)
     const base64Data = fileData.toString('base64')
@@ -1630,7 +1631,7 @@ ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
       const pairedAnswers = Object.entries(metadata.files)
         .filter(([_, f]) => f.type === 'answer' && f.pairId === file.pairId)
         .map(([id, f]) => {
-          const answerPath = path.join(currentDir, f.relativePath)
+          const answerPath = path.join(filesDir, f.relativePath)
           const answerData = fs.readFileSync(answerPath)
           const answerExtension = path.extname(answerPath).toLowerCase().slice(1)
           const answerBase64 = answerData.toString('base64')
@@ -1670,6 +1671,8 @@ ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
 // 添加获取导出错题记录的处理函数
 ipcMain.handle('file:get-exported-mistakes', async () => {
   try {
+    const currentMemberDir = metadataManager.getCurrentMemberDir()
+    const filesDir = path.join(currentMemberDir, 'files')
     const exportBaseDir = getExportBaseDir()
     const result: {
       date: string

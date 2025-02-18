@@ -85,11 +85,10 @@ let targetDirectory = store.get('storagePath') || DEFAULT_STORAGE_PATH
 
 // 获取导出基础目录
 const getExportBaseDir = () => {
-  const currentMember = metadataManager.getCurrentMember()
+  const currentMemberDir = metadataManager.getCurrentMemberDir()
   return path.join(
-    targetDirectory,
-    'exports',
-    currentMember
+    currentMemberDir,
+    'exports'
   )
 }
 

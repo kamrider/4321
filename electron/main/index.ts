@@ -1665,26 +1665,11 @@ ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {
   }
 })
 
-// 添加获取导出错题记录的处理函数
+// 修改 get-exported-mistakes 的实现
 ipcMain.handle('file:get-exported-mistakes', async () => {
   try {
     const exportBaseDir = getExportBaseDir()
-    const result: {
-      date: string
-      path: string
-      mistakes: {
-        path: string
-        preview: string
-        originalFileId?: string
-        metadata?: any
-        answers: Array<{
-          path: string
-          preview: string
-          originalFileId?: string
-          metadata?: any
-        }>
-      }[]
-    }[] = []
+    const result = []
 
     // 检查导出目录是否存在
     if (!fs.existsSync(exportBaseDir)) {
@@ -1708,17 +1693,35 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
       const dateItem = {
         date: dateDir,
         path: datePath,
-        mistakes: [] as typeof result[0]['mistakes']
+        mistakes: []
       }
 
       for (const mistake of mistakes) {
-        const mistakePath = path.join(mistakesDir, mistake)
-        const mistakeData = await fs.promises.readFile(mistakePath)
-        const mistakeExt = path.extname(mistakePath).toLowerCase().slice(1)
-        const mistakeBase64 = mistakeData.toString('base64')
-        
-        // 获取错题元数据
         const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
+        const mistakePath = path.join(mistakesDir, mistake)
+        
+        // 读取错题文件和生成预览图
+        let preview = ''
+        try {
+          // 获取预览图
+          const previewPath = path.join(metadataDir, `错题${mistakeNumber}.preview.webp`)
+          if (fs.existsSync(previewPath)) {
+            const previewData = await fs.promises.readFile(previewPath)
+            preview = `data:image/webp;base64,${previewData.toString('base64')}`
+          } else {
+            // 如果预览图不存在，生成一个
+            const newPreviewPath = await generatePreview(mistakePath, `错题${mistakeNumber}`)
+            const previewData = await fs.promises.readFile(newPreviewPath)
+            preview = `data:image/webp;base64,${previewData.toString('base64')}`
+            
+            // 复制预览图到metadata目录
+            await fs.promises.copyFile(newPreviewPath, previewPath)
+          }
+        } catch (error) {
+          console.error('处理预览图失败:', error)
+        }
+        
+        // 读取错题元数据
         let mistakeMetadata = null
         try {
           const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
@@ -1728,52 +1731,64 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
           }
         } catch (error) {
           console.error('读取错题元数据失败:', error)
+          continue
         }
-        
-        // 获取对应的答案
+
+        // 获取答案文件和预览图
         const answerPattern = new RegExp(`^${mistakeNumber}\\.`)
-        const answers = fs.readdirSync(answersDir)
+        const answerFiles = fs.readdirSync(answersDir)
           .filter(file => answerPattern.test(file))
-          .map(async file => {
-            const answerPath = path.join(answersDir, file)
-            const answerData = await fs.promises.readFile(answerPath)
-            const answerExt = path.extname(answerPath).toLowerCase().slice(1)
-            const answerBase64 = answerData.toString('base64')
-            
-            // 获取答案元数据
-            let answerMetadata = null
-            try {
-              const metadataPath = path.join(metadataDir, `答案${file}.json`)
-              if (fs.existsSync(metadataPath)) {
-                const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
-                answerMetadata = JSON.parse(metadataContent)
-              }
-            } catch (error) {
-              console.error('读取答案元数据失败:', error)
+        
+        const answers = await Promise.all(answerFiles.map(async file => {
+          const answerPath = path.join(answersDir, file)
+          let answerPreview = ''
+          let answerMetadata = null
+
+          try {
+            // 获取答案预览图
+            const previewPath = path.join(metadataDir, `答案${file}.preview.webp`)
+            if (fs.existsSync(previewPath)) {
+              const previewData = await fs.promises.readFile(previewPath)
+              answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+            } else {
+              // 如果预览图不存在，生成一个
+              const newPreviewPath = await generatePreview(answerPath, `答案${file}`)
+              const previewData = await fs.promises.readFile(newPreviewPath)
+              answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+              
+              // 复制预览图到metadata目录
+              await fs.promises.copyFile(newPreviewPath, previewPath)
             }
-            
-            return {
-              path: answerPath,
-              preview: `data:image/${answerExt};base64,${answerBase64}`,
-              originalFileId: answerMetadata?.originalFileId,
-              metadata: answerMetadata?.metadata
+
+            // 读取答案元数据
+            const metadataPath = path.join(metadataDir, `答案${file}.json`)
+            if (fs.existsSync(metadataPath)) {
+              const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
+              answerMetadata = JSON.parse(metadataContent)
             }
-          })
+          } catch (error) {
+            console.error('处理答案失败:', error)
+          }
+          
+          return {
+            path: answerPath,
+            preview: answerPreview,
+            originalFileId: answerMetadata?.originalFileId,
+            metadata: answerMetadata?.metadata
+          }
+        }))
 
         dateItem.mistakes.push({
           path: mistakePath,
-          preview: `data:image/${mistakeExt};base64,${mistakeBase64}`,
+          preview,
           originalFileId: mistakeMetadata?.originalFileId,
           metadata: mistakeMetadata?.metadata,
-          answers: await Promise.all(answers)
+          answers
         })
       }
 
       result.push(dateItem)
     }
-
-    // 按日期倒序排序
-    result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     return { success: true, data: result }
   } catch (error) {

@@ -39,12 +39,18 @@ const sortedExportedList = computed(() => {
   return exportedList.value.map(item => {
     // 对每天的错题进行排序
     const sortedMistakes = [...item.mistakes].sort((a, b) => {
-      // 从文件路径中提取序号
-      const getNumber = (path: string) => {
-        const match = path.match(/错题(\d+)\./);
+      // 从元数据中获取序号
+      const getNumber = (mistake: any) => {
+        if (!mistake || !mistake.metadata) return 0;
+        // 尝试从元数据中获取序号
+        const originalPath = mistake.metadata.relativePath;
+        if (!originalPath) return 0;
+        
+        const match = originalPath.match(/错题(\d+)\./);
         return match ? parseInt(match[1]) : 0;
       };
-      return getNumber(a.path) - getNumber(b.path);
+      
+      return getNumber(a) - getNumber(b);
     });
     
     return {
@@ -74,18 +80,6 @@ onMounted(async () => {
   try {
     const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
     if (result.success) {
-      // 获取每个源文件的metadata
-      for (const item of result.data) {
-        for (const mistake of item.mistakes) {
-          if (mistake.originalFileId) {
-            const sourceMetadata = await window.ipcRenderer.invoke('file:get-mistake-details', mistake.originalFileId)
-            if (sourceMetadata.success && sourceMetadata.data) {
-              mistake.metadata = sourceMetadata.data.metadata
-            }
-          }
-        }
-      }
-
       exportedList.value = result.data
     } else {
       throw new Error(result.error)
@@ -107,18 +101,18 @@ const handleViewDetail = (item: ExportedItem['mistakes'][0]) => {
 
 const handleDelete = async (date: string) => {
   try {
-    const result = await window.ipcRenderer.file.deleteExportedMistakes(date)
+    const result = await window.ipcRenderer.invoke('file:delete-exported-mistakes', date);
     if (result.success) {
-      exportedList.value = exportedList.value.filter(item => item.date !== date)
-      ElMessage.success('删除成功')
+      exportedList.value = exportedList.value.filter(item => item.date !== date);
+      ElMessage.success('删除成功');
     } else {
-      throw new Error(result.error)
+      throw new Error(result.error);
     }
   } catch (error) {
-    console.error('删除失败:', error)
-    ElMessage.error('删除失败')
+    console.error('删除失败:', error);
+    ElMessage.error('删除失败');
   }
-}
+};
 
 const formatDate = (dateStr: string) => {
   try {
@@ -203,7 +197,7 @@ const handleTrainingResult = async (remembered: boolean) => {
             
             <div class="mistakes-grid">
               <div v-for="mistake in item.mistakes"
-                   :key="mistake.path"
+                   :key="mistake.originalFileId"
                    :class="['mistake-item', mistake.metadata?.proficiency === 0 ? 'zero-proficiency-item' : '']"
                    @click="handleViewDetail(mistake)">
                 <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
@@ -221,7 +215,7 @@ const handleTrainingResult = async (remembered: boolean) => {
                   </template>
                 </el-image>
                 
-                <div class="answer-count" v-if="mistake.answers.length > 0">
+                <div class="answer-count" v-if="mistake.answers?.length > 0">
                   {{ mistake.answers.length }} 个答案
                 </div>
 
@@ -229,7 +223,7 @@ const handleTrainingResult = async (remembered: boolean) => {
                   <div class="proficiency" :class="{ 'zero-proficiency': mistake.metadata.proficiency === 0 }">
                     熟练度: {{ mistake.metadata.proficiency }}
                   </div>
-                  <div class="next-training">
+                  <div class="next-training" v-if="mistake.metadata.nextTrainingDate">
                     下次训练: {{ formatDate(mistake.metadata.nextTrainingDate) }}
                   </div>
                 </div>

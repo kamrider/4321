@@ -67,11 +67,9 @@ const store = new Store({
 })
 
 // 获取默认存储路径，完全分离开发和生产环境
-const DEFAULT_STORAGE_PATH = path.join(
-  app.getPath('userData'),
-  APP_NAME,
-  'storage'
-)
+const DEFAULT_STORAGE_PATH = isDevelopment 
+  ? 'E:\\mistakes'
+  : path.join(app.getPath('userData'), APP_NAME, 'storage')
 
 // 配置文件路径也区分环境
 const configPath = path.join(
@@ -83,7 +81,7 @@ const configPath = path.join(
 let isCancelled = false
 
 // 获取存储路径，如果不存在则使用默认路径
-let targetDirectory = store.get('storagePath', DEFAULT_STORAGE_PATH)
+let targetDirectory = store.get('storagePath') || DEFAULT_STORAGE_PATH
 
 // 获取导出基础目录
 const getExportBaseDir = () => {

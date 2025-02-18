@@ -98,7 +98,10 @@ const getTempDirectory = () => path.join(targetDirectory, 'temp')
 // 添加预览图目录配置
 const getPreviewDir = () => {
   const currentMemberDir = metadataManager.getCurrentMemberDir()
-  return path.join(currentMemberDir, 'previews')
+  return path.join(
+    currentMemberDir,
+    'previews'
+  )
 }
 
 // 检查路径是否存在且可写

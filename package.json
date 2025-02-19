@@ -45,7 +45,7 @@
     "docx": "^9.1.1",
     "electron-store": "^10.0.0",
     "element-plus": "^2.9.0",
-    "sharp": "^0.32.6",
+    "sharp": "^0.31.3",
     "uuid": "^11.0.3",
     "vue-router": "^4.5.0"
   },

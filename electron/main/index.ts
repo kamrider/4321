@@ -1507,10 +1507,12 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     const mistakesDir = path.join(exportDir, '错题')
     const answersDir = path.join(exportDir, '答案')
     const metadataDir = path.join(exportDir, 'metadata')
+    const previewsDir = path.join(exportDir, 'previews')
     
     fs.mkdirSync(mistakesDir, { recursive: true })
     fs.mkdirSync(answersDir, { recursive: true })
     fs.mkdirSync(metadataDir, { recursive: true })
+    fs.mkdirSync(previewsDir, { recursive: true })
 
     // 获取当前目录下已存在的错题数量，用于生成新的序号
     const existingMistakes = fs.readdirSync(mistakesDir)
@@ -1522,11 +1524,25 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
     await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
 
+    // 生成错题预览图
+    const mistakePreviewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+    await sharp(params.mistake.path)
+      .resize(800, 800, {
+        fit: 'inside',
+        withoutEnlargement: false
+      })
+      .webp({ 
+        quality: 85,
+        effort: 4
+      })
+      .toFile(mistakePreviewPath)
+
     // 保存错题的元数据
     const mistakeMetadata = {
       originalFileId: params.mistake.fileId,
       exportDate: today.toISOString(),
-      metadata: params.mistake.metadata
+      metadata: params.mistake.metadata,
+      previewPath: path.relative(exportDir, mistakePreviewPath)
     }
     await fs.promises.writeFile(
       path.join(metadataDir, `错题${mistakeNumber}.json`),
@@ -1537,6 +1553,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     const exportInfo = {
       mistake: {
         path: mistakeTargetPath,
+        preview: mistakePreviewPath,
         metadata: params.mistake.metadata
       },
       answer: null as any
@@ -1555,11 +1572,25 @@ ipcMain.handle('file:export-mistake', async (_, params: {
         const answerTargetPath = path.join(answersDir, answerFileName)
         await fs.promises.copyFile(answer.path, answerTargetPath)
 
+        // 生成答案预览图
+        const answerPreviewPath = path.join(previewsDir, `答案${mistakeNumber}.${i + 1}.webp`)
+        await sharp(answer.path)
+          .resize(800, 800, {
+            fit: 'inside',
+            withoutEnlargement: false
+          })
+          .webp({ 
+            quality: 85,
+            effort: 4
+          })
+          .toFile(answerPreviewPath)
+
         // 保存答案的元数据
         const answerMetadata = {
           originalFileId: answer.fileId,
           exportDate: today.toISOString(),
-          metadata: answer.metadata
+          metadata: answer.metadata,
+          previewPath: path.relative(exportDir, answerPreviewPath)
         }
         await fs.promises.writeFile(
           path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
@@ -1568,6 +1599,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
 
         answerPaths.push({
           path: answerTargetPath,
+          preview: answerPreviewPath,
           metadata: answer.metadata
         })
       }
@@ -1701,6 +1733,7 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
       const mistakesDir = path.join(datePath, '错题')
       const answersDir = path.join(datePath, '答案')
       const metadataDir = path.join(datePath, 'metadata')
+      const previewsDir = path.join(datePath, 'previews')
       
       if (!fs.existsSync(mistakesDir) || !fs.existsSync(answersDir)) {
         continue
@@ -1715,12 +1748,9 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
 
       for (const mistake of mistakes) {
         const mistakePath = path.join(mistakesDir, mistake)
-        const mistakeData = await fs.promises.readFile(mistakePath)
-        const mistakeExt = path.extname(mistakePath).toLowerCase().slice(1)
-        const mistakeBase64 = mistakeData.toString('base64')
+        const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
         
         // 获取错题元数据
-        const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
         let mistakeMetadata = null
         try {
           const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
@@ -1732,15 +1762,53 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
           console.error('读取错题元数据失败:', error)
         }
         
+        // 获取预览图
+        let preview = ''
+        try {
+          if (mistakeMetadata?.previewPath) {
+            const previewPath = path.join(datePath, mistakeMetadata.previewPath)
+            if (fs.existsSync(previewPath)) {
+              const previewData = await fs.promises.readFile(previewPath)
+              preview = `data:image/webp;base64,${previewData.toString('base64')}`
+            }
+          }
+          
+          // 如果没有预览图或预览图不存在，生成一个新的
+          if (!preview) {
+            const previewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+            await sharp(mistakePath)
+              .resize(800, 800, {
+                fit: 'inside',
+                withoutEnlargement: false
+              })
+              .webp({ 
+                quality: 85,
+                effort: 4
+              })
+              .toFile(previewPath)
+            
+            const previewData = await fs.promises.readFile(previewPath)
+            preview = `data:image/webp;base64,${previewData.toString('base64')}`
+            
+            // 更新元数据中的预览图路径
+            if (mistakeMetadata) {
+              mistakeMetadata.previewPath = path.relative(datePath, previewPath)
+              await fs.promises.writeFile(
+                path.join(metadataDir, `错题${mistakeNumber}.json`),
+                JSON.stringify(mistakeMetadata, null, 2)
+              )
+            }
+          }
+        } catch (error) {
+          console.error('处理预览图失败:', error)
+        }
+        
         // 获取对应的答案
         const answerPattern = new RegExp(`^${mistakeNumber}\\.`)
         const answers = fs.readdirSync(answersDir)
           .filter(file => answerPattern.test(file))
           .map(async file => {
             const answerPath = path.join(answersDir, file)
-            const answerData = await fs.promises.readFile(answerPath)
-            const answerExt = path.extname(answerPath).toLowerCase().slice(1)
-            const answerBase64 = answerData.toString('base64')
             
             // 获取答案元数据
             let answerMetadata = null
@@ -1754,9 +1822,50 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
               console.error('读取答案元数据失败:', error)
             }
             
+            // 获取答案预览图
+            let answerPreview = ''
+            try {
+              if (answerMetadata?.previewPath) {
+                const previewPath = path.join(datePath, answerMetadata.previewPath)
+                if (fs.existsSync(previewPath)) {
+                  const previewData = await fs.promises.readFile(previewPath)
+                  answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+                }
+              }
+              
+              // 如果没有预览图或预览图不存在，生成一个新的
+              if (!answerPreview) {
+                const previewPath = path.join(previewsDir, `答案${file}.webp`)
+                await sharp(answerPath)
+                  .resize(800, 800, {
+                    fit: 'inside',
+                    withoutEnlargement: false
+                  })
+                  .webp({ 
+                    quality: 85,
+                    effort: 4
+                  })
+                  .toFile(previewPath)
+                
+                const previewData = await fs.promises.readFile(previewPath)
+                answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
+                
+                // 更新元数据中的预览图路径
+                if (answerMetadata) {
+                  answerMetadata.previewPath = path.relative(datePath, previewPath)
+                  await fs.promises.writeFile(
+                    path.join(metadataDir, `答案${file}.json`),
+                    JSON.stringify(answerMetadata, null, 2)
+                  )
+                }
+              }
+            } catch (error) {
+              console.error('处理答案预览图失败:', error)
+            }
+            
             return {
               path: answerPath,
-              preview: `data:image/${answerExt};base64,${answerBase64}`,
+              preview: answerPreview,
               originalFileId: answerMetadata?.originalFileId,
               metadata: answerMetadata?.metadata
             }
@@ -1764,7 +1873,7 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
 
         dateItem.mistakes.push({
           path: mistakePath,
-          preview: `data:image/${mistakeExt};base64,${mistakeBase64}`,
+          preview,
           originalFileId: mistakeMetadata?.originalFileId,
           metadata: mistakeMetadata?.metadata,
           answers: await Promise.all(answers)

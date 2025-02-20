@@ -14,7 +14,11 @@ const handleMenuClick = (route: string) => {
     <Sidebar @menu-click="handleMenuClick" />
     <div class="main-content">
       <div class="content-wrapper">
-        <router-view></router-view>
+        <router-view v-slot="{ Component }">
+          <keep-alive :include="['History', 'Mistake', 'ExportedMistakes']">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </div>
     </div>
   </div>

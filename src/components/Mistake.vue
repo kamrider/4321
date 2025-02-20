@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted, defineComponent } from 'vue'
 import type { MistakeItem, TrainingRecord } from '../../electron/preload'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
@@ -299,6 +299,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
+})
+
+defineComponent({
+  name: 'Mistake'
 })
 </script>
 

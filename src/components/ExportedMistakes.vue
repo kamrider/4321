@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { defineComponent } from 'vue'
+
+defineComponent({
+  name: 'ExportedMistakes'
+})
+
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Delete, Check, Close } from '@element-plus/icons-vue'

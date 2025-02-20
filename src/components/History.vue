@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, defineComponent } from 'vue'
 import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
@@ -991,6 +991,10 @@ const handleSchulteComplete = (time: number) => {
     showActualDetail(activeItem.value)
   }
 }
+
+defineComponent({
+  name: 'History'
+})
 </script>
 
 <template>

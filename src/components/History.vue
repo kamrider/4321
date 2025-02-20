@@ -69,7 +69,7 @@ const isAttentionMode = ref(true)  // 修改为默认开启
 // 添加舒尔特方格相关的状态
 const showSchulteGrid = ref(false)
 const schulteGridSize = ref(5)
-const schulteTimeLimit = ref(20)  // 修改默认时间为20秒
+const schulteTimeLimit = ref(18)  // 修改默认时间为20秒
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -1034,7 +1034,7 @@ const handleSchulteComplete = (time: number) => {
           <el-input-number 
             v-model="schulteTimeLimit"
             :min="1"
-            :max="60"
+            :max="18"
             :step="1"
             size="small"
             class="time-limit-input"

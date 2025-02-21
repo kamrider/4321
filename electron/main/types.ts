@@ -52,3 +52,30 @@ interface MetadataStore {
     [id: string]: FileMetadata
   }
 } 
+
+// 添加用户相关的类型定义
+interface User {
+  id: string
+  username: string
+  passwordHash: string
+  createdAt: string
+  lastLoginAt: string
+}
+
+interface UserStore {
+  version: string
+  users: {
+    [id: string]: User
+  }
+  currentUser?: string
+}
+
+// 登录结果类型
+interface LoginResult {
+  success: boolean
+  data?: {
+    userId: string
+    username: string
+  }
+  error?: string
+} 

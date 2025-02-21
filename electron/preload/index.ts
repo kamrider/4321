@@ -212,6 +212,26 @@ export interface IpcRenderer {
 }
 
 // --------- Expose some API to the Renderer process ---------
+contextBridge.exposeInMainWorld('electron', {
+  // ... 现有的API
+  invoke: (channel: string, ...args: any[]) => {
+    const validChannels = [
+      'user:register',
+      'user:login',
+      'user:logout',
+      'user:get-current',
+      'user:get-info',
+      'user:get-all',
+      'user:switch',
+      // ... 其他已有的channel
+    ]
+    if (validChannels.includes(channel)) {
+      return ipcRenderer.invoke(channel, ...args)
+    }
+    throw new Error(`不允许使用的channel: ${channel}`)
+  }
+})
+
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args

@@ -41,6 +41,9 @@ const showAnswer = ref(false)
 // 添加训练相关的状态
 const isTraining = ref(false)
 
+// 添加过滤类型的状态
+const filterType = ref<'all' | 'selected' | 'training'>('all')
+
 // 添加计算属性来对列表进行排序
 const sortedExportedList = computed(() => {
   return exportedList.value.map(item => {
@@ -64,6 +67,21 @@ const sortedExportedList = computed(() => {
     const dateB = new Date(b.date.replace(/-/g, '/')).getTime();
     return dateB - dateA;
   });
+});
+
+// 修改计算属性，添加过滤逻辑
+const filteredExportedList = computed(() => {
+  return sortedExportedList.value.map(item => {
+    const filteredMistakes = item.mistakes.filter(mistake => {
+      if (filterType.value === 'all') return true;
+      return mistake.exportType === filterType.value;
+    });
+    
+    return {
+      ...item,
+      mistakes: filteredMistakes
+    };
+  }).filter(item => item.mistakes.length > 0);
 });
 
 // 添加计算属性来判断是否可以训练
@@ -194,12 +212,21 @@ const getItemClass = (mistake: ExportedMistake) => {
 
 <template>
   <div class="exported-container">
-    <el-empty v-if="!loading && exportedList.length === 0" description="暂无导出记录" />
+    <!-- 添加过滤控制栏 -->
+    <div class="filter-bar">
+      <el-radio-group v-model="filterType" size="large">
+        <el-radio-button label="all">全部记录</el-radio-button>
+        <el-radio-button label="selected">选择导出</el-radio-button>
+        <el-radio-button label="training">训练导出</el-radio-button>
+      </el-radio-group>
+    </div>
+
+    <el-empty v-if="!loading && filteredExportedList.length === 0" description="暂无导出记录" />
     
     <el-skeleton :loading="loading" animated :count="4" v-else>
       <template #default>
         <div class="export-list">
-          <div v-for="item in sortedExportedList" 
+          <div v-for="item in filteredExportedList" 
                :key="item.date" 
                class="export-item">
             <div class="export-header">
@@ -376,6 +403,8 @@ const getItemClass = (mistake: ExportedMistake) => {
   transition: all 0.3s;
   padding: 4px;
   border: 2px solid transparent;
+  /* 添加左边框样式来区分不同类型 */
+  border-left-width: 4px;
 }
 
 .mistake-item:hover {
@@ -498,5 +527,43 @@ const getItemClass = (mistake: ExportedMistake) => {
   border-bottom-left-radius: 4px;
   font-size: 12px;
   z-index: 1;
+}
+
+.filter-bar {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: center;
+}
+
+.selected-export {
+  border-left-color: var(--el-color-primary);
+}
+
+.training-export {
+  border-left-color: var(--el-color-success);
+}
+
+/* 添加类型标签样式 */
+.export-type-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: white;
+  z-index: 1;
+}
+
+.selected-badge {
+  background-color: var(--el-color-primary);
+}
+
+.training-badge {
+  background-color: var(--el-color-success);
 }
 </style> 

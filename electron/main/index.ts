@@ -1713,6 +1713,7 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
         path: string
         preview: string
         originalFileId?: string
+        exportType: 'selected' | 'training'
         metadata?: any
         answers: Array<{
           path: string
@@ -1878,6 +1879,7 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
           path: mistakePath,
           preview,
           originalFileId: mistakeMetadata?.originalFileId,
+          exportType: mistakeMetadata?.exportType,
           metadata: mistakeMetadata?.metadata,
           answers: await Promise.all(answers)
         })

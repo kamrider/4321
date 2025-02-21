@@ -235,12 +235,6 @@ const getItemClass = (mistake: ExportedMistake) => {
                 <span>{{ formatDate(item.date) }}</span>
                 <span class="count">(共 {{ item.mistakes.length }} 题)</span>
               </div>
-              <el-button 
-                type="danger" 
-                :icon="Delete"
-                circle
-                @click="handleDelete(item.date)"
-              />
             </div>
             
             <div class="mistakes-grid">

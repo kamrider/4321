@@ -114,10 +114,11 @@ interface UploadAPI {
 }
 
 // 在已有的接口定义后添加新的接口
-interface ExportMistakeParams {
+export interface ExportMistakeParams {
   mistake: MistakeItem
   answer: MistakeItem | null
   exportTime: string
+  exportType: 'selected' | 'training'
 }
 
 interface ExportMistakeResult {

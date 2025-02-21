@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, defineComponent } from 'vue'
 import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { MistakeItem as HistoryItem, TrainingRecord } from '../../electron/preload'
+import type { MistakeItem as HistoryItem, TrainingRecord, ExportMistakeParams } from '../../electron/preload'
 import SchulteGrid from './SchulteGrid.vue'
 
 const historyList = ref<HistoryItem[]>([])
@@ -523,7 +523,8 @@ const exportHistory = async () => {
           const exportResult = await window.ipcRenderer.file.exportMistake({
             mistake: mistakeResult.data,
             answer: mistakeResult.data.metadata?.pairedWith,
-            exportTime: new Date().toISOString()
+            exportTime: new Date().toISOString(),
+            exportType: 'selected'
           })
           
           if (exportResult.success) {
@@ -603,11 +604,12 @@ const submitTraining = async (fileId: string, success: boolean) => {
             throw new Error('获取错题详情失败')
           }
 
-          // 调用导出函数
+          // 先导出为训练题目
           const exportResult = await window.ipcRenderer.file.exportMistake({
             mistake: mistakeResult.data,
             answer: mistakeResult.data.metadata?.pairedWith,
-            exportTime: new Date().toISOString()
+            exportTime: new Date().toISOString(),
+            exportType: 'training'
           })
           
           if (exportResult.success) {

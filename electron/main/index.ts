@@ -1491,6 +1491,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
   mistake: MistakeItem
   answer: MistakeItem | MistakeItem[] | null
   exportTime: string
+  exportType: 'selected' | 'training'
 }) => {
   try {
     const exportBaseDir = getExportBaseDir()
@@ -1541,6 +1542,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     const mistakeMetadata = {
       originalFileId: params.mistake.fileId,
       exportDate: today.toISOString(),
+      exportType: params.exportType,
       metadata: params.mistake.metadata,
       previewPath: path.relative(exportDir, mistakePreviewPath)
     }
@@ -1589,6 +1591,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
         const answerMetadata = {
           originalFileId: answer.fileId,
           exportDate: today.toISOString(),
+          exportType: params.exportType,
           metadata: answer.metadata,
           previewPath: path.relative(exportDir, answerPreviewPath)
         }

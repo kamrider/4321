@@ -13,6 +13,7 @@ interface ExportedMistake {
   path: string
   preview: string
   originalFileId?: string
+  exportType: 'selected' | 'training'
   metadata?: any
   answers: Array<{
     path: string
@@ -181,6 +182,14 @@ const handleTrainingResult = async (remembered: boolean) => {
     ElMessage.error('提交训练结果失败')
   }
 }
+
+const getItemClass = (mistake: ExportedMistake) => {
+  return {
+    'mistake-item': true,
+    'selected-export': mistake.exportType === 'selected',
+    'training-export': mistake.exportType === 'training'
+  }
+}
 </script>
 
 <template>
@@ -210,7 +219,7 @@ const handleTrainingResult = async (remembered: boolean) => {
             <div class="mistakes-grid">
               <div v-for="mistake in item.mistakes"
                    :key="mistake.path"
-                   :class="['mistake-item', mistake.metadata?.proficiency === 0 ? 'zero-proficiency-item' : '']"
+                   :class="getItemClass(mistake)"
                    @click="handleViewDetail(mistake)">
                 <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
                   需加强

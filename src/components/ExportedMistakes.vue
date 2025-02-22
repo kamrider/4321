@@ -165,7 +165,6 @@ const formatDate = (dateStr: string) => {
 
 // 修改训练结果提交函数
 const handleTrainingResult = async (remembered: boolean) => {
-  // 如果正在提交中,直接返回
   if (isSubmitting.value) return
   
   if (!activeItem.value?.originalFileId) {
@@ -174,16 +173,35 @@ const handleTrainingResult = async (remembered: boolean) => {
   }
 
   try {
-    // 设置提交状态
     isSubmitting.value = true
-    
-    // 添加视觉反馈
-    const loadingMessage = ElMessage({
+        // 添加视觉反馈
+     const loadingMessage = ElMessage({
       message: '正在提交训练结果...',
       type: 'info',
       duration: 0
     })
+    // 如果没记住，则导出错题
+    if (!remembered) {
+      // 获取当前错题的完整信息
+      const mistakeResult = await window.ipcRenderer.file.getMistakeDetails(activeItem.value.originalFileId)
+      if (!mistakeResult.success) {
+        throw new Error('获取错题详情失败')
+      }
 
+      // 调用导出函数
+      const exportResult = await window.ipcRenderer.file.exportMistake({
+        mistake: mistakeResult.data,
+        answer: mistakeResult.data.metadata?.pairedWith,
+        exportTime: new Date().toISOString(),
+        exportType: 'training'
+      })
+      
+      if (exportResult.success) {
+        ElMessage.success('已自动导出到错题本')
+      }
+    }
+
+    // 提交训练结果
     const result = await window.ipcRenderer.training.submitResult(
       activeItem.value.originalFileId,
       remembered
@@ -222,7 +240,6 @@ const handleTrainingResult = async (remembered: boolean) => {
     console.error('提交训练结果失败:', error)
     ElMessage.error('提交训练结果失败')
   } finally {
-    // 延迟重置提交状态,防止快速重复点击
     setTimeout(() => {
       isSubmitting.value = false
     }, 500)

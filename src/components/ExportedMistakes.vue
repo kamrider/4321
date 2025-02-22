@@ -95,6 +95,9 @@ const canTrain = computed(() => {
   return nextTrainingDate <= now
 })
 
+// 添加提交状态
+const isSubmitting = ref(false)
+
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
@@ -160,21 +163,41 @@ const formatDate = (dateStr: string) => {
   }
 }
 
-// 添加训练相关的方法
+// 修改训练结果提交函数
 const handleTrainingResult = async (remembered: boolean) => {
+  // 如果正在提交中,直接返回
+  if (isSubmitting.value) return
+  
   if (!activeItem.value?.originalFileId) {
     ElMessage.warning('无法找到原始错题信息')
     return
   }
 
   try {
+    // 设置提交状态
+    isSubmitting.value = true
+    
+    // 添加视觉反馈
+    const loadingMessage = ElMessage({
+      message: '正在提交训练结果...',
+      type: 'info',
+      duration: 0
+    })
+
     const result = await window.ipcRenderer.training.submitResult(
       activeItem.value.originalFileId,
       remembered
     )
 
     if (result.success) {
-      ElMessage.success(remembered ? '太棒了！继续保持！' : '没关系，下次继续加油！')
+      // 关闭加载提示
+      loadingMessage.close()
+      
+      // 成功提示
+      ElMessage.success({
+        message: remembered ? '太棒了！继续保持！' : '没关系，下次继续加油！',
+        duration: 2000
+      })
       
       // 更新本地状态
       if (activeItem.value.metadata) {
@@ -198,6 +221,11 @@ const handleTrainingResult = async (remembered: boolean) => {
   } catch (error) {
     console.error('提交训练结果失败:', error)
     ElMessage.error('提交训练结果失败')
+  } finally {
+    // 延迟重置提交状态,防止快速重复点击
+    setTimeout(() => {
+      isSubmitting.value = false
+    }, 500)
   }
 }
 
@@ -299,21 +327,28 @@ const getItemClass = (mistake: ExportedMistake) => {
             type="success" 
             :icon="Check"
             @click="handleTrainingResult(true)"
-            :disabled="!canTrain"
+            :loading="isSubmitting"
+            :disabled="isSubmitting || !canTrain"
           >
-            记住了
+            {{ isSubmitting ? '提交中...' : '记住了' }}
           </el-button>
           <el-button 
             type="danger" 
             :icon="Close"
             @click="handleTrainingResult(false)"
-            :disabled="!canTrain"
+            :loading="isSubmitting"
+            :disabled="isSubmitting || !canTrain"
           >
-            没记住
+            {{ isSubmitting ? '提交中...' : '没记住' }}
           </el-button>
         </el-button-group>
+        
+        <!-- 添加训练状态提示 -->
         <div v-if="!canTrain" class="training-tip">
           下次训练时间未到
+        </div>
+        <div v-else-if="isSubmitting" class="training-tip submitting">
+          正在提交训练结果...
         </div>
       </div>
       
@@ -559,5 +594,16 @@ const getItemClass = (mistake: ExportedMistake) => {
 
 .training-badge {
   background-color: var(--el-color-success);
+}
+
+/* 添加新的样式 */
+.training-tip.submitting {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+.training-control .el-button.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 </style> 

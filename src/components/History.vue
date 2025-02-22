@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, defineComponent } from 'vue'
-import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Timer, Bell, ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Check, Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { MistakeItem as HistoryItem, TrainingRecord, ExportMistakeParams } from '../../electron/preload'
 import SchulteGrid from './SchulteGrid.vue'
@@ -70,6 +70,9 @@ const isAttentionMode = ref(true)  // 修改为默认开启
 const showSchulteGrid = ref(false)
 const schulteGridSize = ref(5)
 const schulteTimeLimit = ref(18)  // 修改默认时间为20秒
+
+// 添加提交状态
+const isSubmitting = ref(false)
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -350,45 +353,65 @@ const formatTrainingStatus = (dateStr: string): { text: string; status: 'pending
   }
 }
 
-// 修改答题函数，使用正确的 submitResult 方法
-const handleRemembered = async (item: HistoryItem, remembered: boolean) => {
-  // 检查是否被冻结
-  if (item.metadata?.isFrozen) {
-    ElMessage.warning('该项目已被冻结，无法训练')
-    return
-  }
-
-  // 停止计时
-  if (timerInterval.value) {
-    clearInterval(timerInterval.value)
-    timerInterval.value = null
-  }
-
-  // 记录答题时间（毫秒）
-  const answerTime = time.value * 10
-
+// 修改训练结果提交函数
+const handleTrainingResult = async (remembered: boolean) => {
+  // 如果正在提交中,直接返回
+  if (isSubmitting.value) return
+  
   try {
-    const result = await window.ipcRenderer.training.submitResult(item.fileId, remembered)
+    // 设置提交状态
+    isSubmitting.value = true
+    
+    if (!activeItem.value?.fileId) {
+      ElMessage.warning('无法找到错题信息')
+      return
+    }
+
+    // 添加视觉反馈
+    const loadingMessage = ElMessage({
+      message: '正在提交训练结果...',
+      type: 'info',
+      duration: 0
+    })
+
+    const result = await window.ipcRenderer.training.submitResult(
+      activeItem.value.fileId,
+      remembered
+    )
+
     if (result.success) {
-      ElMessage.success(remembered ? '太棒了！继续保持！' : '没关系，下次继续加油！')
-      // 更新列表
-      const nextTraining = await window.ipcRenderer.training.getNextTraining(item.fileId)
-      if (nextTraining.success) {
-        // 更新列表中对应项的训练信息
-        const listItem = historyList.value.find(i => i.fileId === item.fileId)
-        if (listItem && listItem.metadata) {
-          listItem.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
-          listItem.metadata.proficiency = nextTraining.data.currentProficiency
-          listItem.metadata.trainingInterval = nextTraining.data.currentInterval
+      // 关闭加载提示
+      loadingMessage.close()
+      
+      // 成功提示
+      ElMessage.success({
+        message: remembered ? '太棒了！继续保持！' : '没关系，下次继续加油！',
+        duration: 2000
+      })
+      
+      // 更新本地状态
+      if (activeItem.value.metadata) {
+        const nextTraining = await window.ipcRenderer.training.getNextTraining(
+          activeItem.value.fileId
+        )
+        if (nextTraining.success) {
+          activeItem.value.metadata.proficiency = nextTraining.data.currentProficiency
+          activeItem.value.metadata.trainingInterval = nextTraining.data.currentInterval
+          activeItem.value.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
         }
       }
+    } else {
+      throw new Error(result.error)
     }
   } catch (error) {
-    console.error('提交答案失败:', error)
-    ElMessage.error('提交答案失败')
+    console.error('提交训练结果失败:', error)
+    ElMessage.error('提交训练结果失败')
+  } finally {
+    // 延迟重置提交状态,防止快速重复点击
+    setTimeout(() => {
+      isSubmitting.value = false
+    }, 500)
   }
-
-  dialogVisible.value = false
 }
 
 // 修改查看详情处理函数
@@ -573,227 +596,6 @@ onUnmounted(() => {
   // 移除键盘事件监听
   window.removeEventListener('keydown', handleKeydown)
 })
-
-// 修改提交训练结果的方法
-const submitTraining = async (fileId: string, success: boolean) => {
-  // 检查是否被冻结
-  const item = historyList.value.find(item => item.fileId === fileId)
-  if (item?.metadata?.isFrozen) {
-    ElMessage.warning('该项目已被冻结，无法训练')
-    return
-  }
-
-  // 停止计时
-  if (timerInterval.value) {
-    clearInterval(timerInterval.value)
-    timerInterval.value = null
-  }
-
-  // 记录答题时间（毫秒）
-  const answerTime = time.value * 10
-
-  try {
-    const result = await window.ipcRenderer.training.submitResult(fileId, success)
-    if (result.success) {
-      // 如果答错了(success为false),则导出错题和答案
-      if (!success && activeItem.value) {
-        try {
-          // 获取当前错题的完整信息
-          const mistakeResult = await window.ipcRenderer.file.getMistakeDetails(activeItem.value.fileId)
-          if (!mistakeResult.success) {
-            throw new Error('获取错题详情失败')
-          }
-
-          // 先导出为训练题目
-          const exportResult = await window.ipcRenderer.file.exportMistake({
-            mistake: mistakeResult.data,
-            answer: mistakeResult.data.metadata?.pairedWith,
-            exportTime: new Date().toISOString(),
-            exportType: 'training'
-          })
-          
-          if (exportResult.success) {
-            ElMessage.success(`错题已导出到: ${exportResult.data.exportPath}`)
-          }
-        } catch (error) {
-          console.error('导出错题失败:', error)
-          ElMessage.warning('错题导出失败,但训练记录已保存')
-        }
-      }
-
-      // 原有的训练记录更新逻辑
-      const nextTraining = await window.ipcRenderer.training.getNextTraining(fileId)
-      if (nextTraining.success) {
-        // 更新列表中对应项的训练信息
-        const item = historyList.value.find(item => item.fileId === fileId)
-        if (item) {
-          // 初始化确保
-          if (!item.metadata) {
-            item.metadata = {
-              proficiency: 0,
-              trainingInterval: 0,
-              lastTrainingDate: '',
-              nextTrainingDate: '',
-              subject: '',
-              tags: [],
-              notes: '',
-              trainingRecords: []
-            }
-          }
-          if (!item.metadata.trainingRecords) {
-            item.metadata.trainingRecords = []
-          }
-          
-          // 更新训练信息
-          item.metadata.nextTrainingDate = nextTraining.data.nextTrainingDate
-          item.metadata.proficiency = nextTraining.data.currentProficiency
-          item.metadata.trainingInterval = nextTraining.data.currentInterval
-          
-          // 添加新记录，包含答题时间
-          item.metadata.trainingRecords.push({
-            date: new Date().toISOString(),
-            result: success ? 'success' : 'fail',
-            proficiencyBefore: item.metadata.proficiency,
-            proficiencyAfter: nextTraining.data.currentProficiency,
-            intervalAfter: nextTraining.data.currentInterval,
-            isOnTime: true,
-            answerTime // 添加答题时间
-          })
-        }
-      }
-      ElMessage.success('训练记录已保存')
-      // 如果在考试模式中，自动跳转到下一题
-      if (isInExam.value) {
-        currentExamIndex.value++
-        if (currentExamIndex.value < selectedExamItems.value.length) {
-          // 还有下一题，自动跳转
-          handleViewDetail(selectedExamItems.value[currentExamIndex.value])
-        } else {
-          // 考试完成
-          isInExam.value = false
-          isExamMode.value = false
-          selectedExamItems.value = []
-          ElMessage.success('考试已完成！')
-          handleCloseDialog()
-        }
-      }
-    } else {
-      throw new Error(result.error)
-    }
-  } catch (error) {
-    console.error('提交训练结果失败:', error)
-    ElMessage.error('提交训练结果失败')
-  }
-}
-
-// 添加音乐组合配置
-const MELODIES = {
-  1: [ // 第1分钟：Do Re Mi
-    { freq: NOTES.DO, duration: 0.2 },
-    { freq: NOTES.RE, duration: 0.2 },
-    { freq: NOTES.MI, duration: 0.3 }
-  ],
-  2: [ // 第2分钟：Mi Fa So
-    { freq: NOTES.MI, duration: 0.2 },
-    { freq: NOTES.FA, duration: 0.2 },
-    { freq: NOTES.SOL, duration: 0.3 }
-  ],
-  3: [ // 第3分钟：So La Si
-    { freq: NOTES.SOL, duration: 0.2 },
-    { freq: NOTES.LA, duration: 0.2 },
-    { freq: NOTES.SI, duration: 0.3 }
-  ],
-  4: [ // 第4分钟：La Si Do高
-    { freq: NOTES.LA, duration: 0.2 },
-    { freq: NOTES.SI, duration: 0.2 },
-    { freq: NOTES.DO_HIGH, duration: 0.3 }
-  ],
-  5: [ // 第5分钟：完整音阶 Do Re Mi Fa So
-    { freq: NOTES.DO, duration: 0.15 },
-    { freq: NOTES.RE, duration: 0.15 },
-    { freq: NOTES.MI, duration: 0.15 },
-    { freq: NOTES.FA, duration: 0.15 },
-    { freq: NOTES.SOL, duration: 0.3 }
-  ],
-  max: [ // 5分钟以上：完整音阶 Fa So La Si Do高
-    { freq: NOTES.FA, duration: 0.15 },
-    { freq: NOTES.SOL, duration: 0.15 },
-    { freq: NOTES.LA, duration: 0.15 },
-    { freq: NOTES.SI, duration: 0.15 },
-    { freq: NOTES.DO_HIGH, duration: 0.3 }
-  ]
-}
-
-// 修改音效播放函数
-const playMelody = async () => {
-  try {
-    if (!audioContext.value) {
-      audioContext.value = new AudioContext()
-    }
-
-    const ctx = audioContext.value
-    const now = ctx.currentTime
-    
-    // 创建音量控制
-    const masterGain = ctx.createGain()
-    masterGain.gain.value = 0.3 // 设置整体音量
-    masterGain.connect(ctx.destination)
-
-    // 根据当前分钟数选择音乐
-    const minutes = Math.floor((time.value * 10) / 60000) + 1
-    const melodyKey = minutes <= 5 ? minutes : 'max'
-    const notes = MELODIES[melodyKey]
-
-    notes.forEach((note, index) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      
-      // 使用正弦波
-      osc.type = 'sine'
-      osc.frequency.value = note.freq
-      
-      // 设置音量包络
-      gain.gain.setValueAtTime(0, now + index * note.duration)
-      gain.gain.linearRampToValueAtTime(0.3, now + index * note.duration + 0.05)
-      gain.gain.linearRampToValueAtTime(0, now + (index + 1) * note.duration)
-      
-      // 连接节点
-      osc.connect(gain)
-      gain.connect(masterGain)
-      
-      // 开始和结束
-      osc.start(now + index * note.duration)
-      osc.stop(now + (index + 1) * note.duration)
-    })
-  } catch (error) {
-    console.error('播放提示音失败:', error)
-  }
-}
-
-// 修改时间监听函数
-watch(time, (newValue) => {
-  // 每分钟（6000 * 10ms = 1分钟）触发一次
-  if (newValue > 0 && newValue % 6000 === 0) {
-    playMelody()
-    // 计算当前分钟数
-    const minutes = Math.floor(newValue / 6000)
-    const timeColor = TIME_COLORS[Math.min(minutes, 'max')]
-    ElMessage({
-      message: `已经练习 ${minutes} 分钟了，继续加油！`,
-      type: minutes <= 2 ? 'success' : minutes <= 4 ? 'warning' : 'error',
-      duration: 3000
-    })
-  }
-})
-
-// 添加右键菜单处理函数
-const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
-  event.preventDefault()
-  selectedItem.value = item
-  isEditing.value = false // 默认为查看模式
-  initEditingMetadata(item)
-  metadataDialogVisible.value = true
-}
 
 // 考试模式相关方法
 const toggleExamMode = () => {
@@ -1241,7 +1043,7 @@ defineComponent({
           size="large"
           round
           :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
-          @click="activeItem && submitTraining(activeItem.fileId, true)"
+          @click="activeItem && handleTrainingResult(true)"
         >
           记住了
         </el-button>
@@ -1262,7 +1064,7 @@ defineComponent({
           size="large"
           round
           :disabled="activeItem && formatTrainingStatus(activeItem.metadata.nextTrainingDate).status === 'pending'"
-          @click="activeItem && submitTraining(activeItem.fileId, false)"
+          @click="activeItem && handleTrainingResult(false)"
         >
           没记住
         </el-button>
@@ -1432,6 +1234,37 @@ defineComponent({
       @complete="handleSchulteComplete"
     />
   </el-dialog>
+
+  <div class="training-control" v-if="isTraining">
+    <el-button-group>
+      <el-button 
+        type="success" 
+        :icon="Check"
+        @click="handleTrainingResult(true)"
+        :loading="isSubmitting"
+        :disabled="isSubmitting || !canTrain"
+      >
+        {{ isSubmitting ? '提交中...' : '记住了' }}
+      </el-button>
+      <el-button 
+        type="danger" 
+        :icon="Close"
+        @click="handleTrainingResult(false)"
+        :loading="isSubmitting"
+        :disabled="isSubmitting || !canTrain"
+      >
+        {{ isSubmitting ? '提交中...' : '没记住' }}
+      </el-button>
+    </el-button-group>
+    
+    <!-- 添加训练状态提示 -->
+    <div v-if="!canTrain" class="training-tip">
+      下次训练时间未到
+    </div>
+    <div v-else-if="isSubmitting" class="training-tip submitting">
+      正在提交训练结果...
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -1947,5 +1780,16 @@ defineComponent({
 .time-limit-input :deep(.el-input-number__prefix),
 .time-limit-input :deep(.el-input-number__suffix) {
   color: var(--el-text-color-regular);
+}
+
+.training-tip.submitting {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 添加按钮禁用时的样式 */
+.el-button.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 </style> 

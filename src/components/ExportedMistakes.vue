@@ -166,6 +166,7 @@ const handleViewDetail = (item: ExportedMistake) => {
   dialogVisible.value = true
   showAnswer.value = false
   loadTimerState(item.originalFileId)
+  isTraining.value = true
 }
 
 const handleCloseDialog = () => {

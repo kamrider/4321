@@ -793,6 +793,13 @@ const toggleAttentionMode = () => {
   ElMessage.success(isAttentionMode.value ? '已开启注意力模式' : '已关闭注意力模式')
 }
 
+// 右键菜单处理函数
+const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
+  event.preventDefault()
+  selectedItem.value = item
+  metadataDialogVisible.value = true
+}
+
 // 修改舒尔特方格完成的处理函数
 const handleSchulteComplete = (time: number) => {
   const timeInSeconds = time / 1000

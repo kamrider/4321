@@ -793,11 +793,69 @@ const toggleAttentionMode = () => {
   ElMessage.success(isAttentionMode.value ? '已开启注意力模式' : '已关闭注意力模式')
 }
 
-// 右键菜单处理函数
-const handleContextMenu = (event: MouseEvent, item: HistoryItem) => {
-  event.preventDefault()
-  selectedItem.value = item
+// 添加右键菜单相关的状态
+const contextMenuVisible = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const contextMenuItem = ref<HistoryItem | null>(null)
+
+// 添加右键菜单处理函数
+const handleContextMenu = (e: MouseEvent, item: HistoryItem) => {
+  e.preventDefault()
+  contextMenuVisible.value = true
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  contextMenuItem.value = item
   metadataDialogVisible.value = true
+}
+
+// 添加关闭右键菜单函数
+const closeContextMenu = () => {
+  contextMenuVisible.value = false
+  contextMenuItem.value = null
+  metadataDialogVisible.value = false
+}
+
+// 在 onMounted 中添加事件监听
+onMounted(() => {
+  document.addEventListener('click', closeContextMenu)
+})
+
+// 在 onUnmounted 中移除事件监听
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu)
+})
+
+// 添加冻结状态切换相关的状态
+const isTogglingFreeze = ref(false)
+
+// 添加冻结/解冻处理函数
+const handleFreezeToggle = async (item: HistoryItem) => {
+  if (!item?.fileId || isTogglingFreeze.value) return
+  
+  try {
+    isTogglingFreeze.value = true
+    const newFrozenState = !item.metadata?.isFrozen
+    
+    const result = await window.ipcRenderer.file.setFrozen(
+      item.fileId,
+      newFrozenState
+    )
+    
+    if (result.success) {
+      // 更新本地状态
+      if (item.metadata) {
+        item.metadata.isFrozen = newFrozenState
+      }
+      
+      ElMessage.success(newFrozenState ? '错题已冻结' : '错题已解冻')
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('切换冻结状态失败:', error)
+    ElMessage.error('操作失败')
+  } finally {
+    isTogglingFreeze.value = false
+  }
 }
 
 // 修改舒尔特方格完成的处理函数
@@ -1143,107 +1201,38 @@ defineComponent({
   <!-- 添加元数据弹窗 -->
   <el-dialog
     v-model="metadataDialogVisible"
-    title="训练信息"
+    title="错题详情"
     width="500px"
   >
-    <div v-if="selectedItem" class="metadata-content">
-      <!-- 添加编辑/查看切换按钮 -->
-      <div class="dialog-header">
-        <el-switch
-          v-model="isEditing"
-          active-text="编辑模式"
-          inactive-text="查看模式"
-        />
-      </div>
-
-      <!-- 查看模式 -->
-      <el-descriptions v-if="!isEditing" :column="1" border>
+    <div v-if="contextMenuItem" class="metadata-content">
+      <el-descriptions :column="1" border>
         <el-descriptions-item label="熟练度">
-          {{ selectedItem.metadata.proficiency }}
+          {{ contextMenuItem.metadata?.proficiency || 0 }}
         </el-descriptions-item>
         <el-descriptions-item label="训练间隔">
-          {{ selectedItem.metadata.trainingInterval }} 天
+          {{ contextMenuItem.metadata?.trainingInterval || 0 }} 天
         </el-descriptions-item>
         <el-descriptions-item label="上次训练">
-          {{ formatDate(selectedItem.metadata.lastTrainingDate) }}
+          {{ formatDate(contextMenuItem.metadata?.lastTrainingDate) }}
         </el-descriptions-item>
         <el-descriptions-item label="下次训练">
-          {{ formatDate(selectedItem.metadata.nextTrainingDate) }}
+          {{ formatDate(contextMenuItem.metadata?.nextTrainingDate) }}
         </el-descriptions-item>
-        <el-descriptions-item label="答题时限">
-          {{ selectedItem.metadata.answerTimeLimit }} 秒
-        </el-descriptions-item>
-        <el-descriptions-item label="科目">
-          {{ selectedItem.metadata.subject || '未设置' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="标签">
-          <el-tag 
-            v-for="tag in selectedItem.metadata.tags" 
-            :key="tag"
-            size="small"
-            class="mx-1"
-          >
-            {{ tag }}
-          </el-tag>
+        <el-descriptions-item label="冻结状态">
+          <div class="freeze-status">
+            <span>{{ contextMenuItem.metadata?.isFrozen ? '已冻结' : '未冻结' }}</span>
+            <el-button
+              :type="contextMenuItem.metadata?.isFrozen ? 'success' : 'warning'"
+              size="small"
+              @click="handleFreezeToggle(contextMenuItem)"
+              :loading="isTogglingFreeze"
+            >
+              {{ contextMenuItem.metadata?.isFrozen ? '解冻' : '冻结' }}
+            </el-button>
+          </div>
         </el-descriptions-item>
       </el-descriptions>
-
-      <!-- 编辑模式 -->
-      <el-form 
-        v-else
-        :model="editingMetadata"
-        label-width="100px"
-        class="edit-form"
-      >
-        <el-form-item label="答题时限">
-          <el-input
-            v-model.number="editingMetadata.answerTimeLimit"
-            type="number"
-            :min="30"
-            :max="600"
-            placeholder="请输入答题时限(秒)"
-          >
-            <template #append>秒</template>
-          </el-input>
-        </el-form-item>
-        
-        <el-form-item label="科目">
-          <el-input v-model="editingMetadata.subject" />
-        </el-form-item>
-        
-        <el-form-item label="标签">
-          <el-select
-            v-model="editingMetadata.tags"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            placeholder="请输入或选择标签"
-          >
-            <el-option
-              v-for="tag in existingTags"
-              :key="tag"
-              :label="tag"
-              :value="tag"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
     </div>
-
-    <!-- 添加底部按钮 -->
-    <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="metadataDialogVisible = false">关闭</el-button>
-        <el-button 
-          v-if="isEditing"
-          type="primary" 
-          @click="handleSaveMetadata"
-        >
-          保存
-        </el-button>
-      </span>
-    </template>
   </el-dialog>
 
   <!-- 添加舒尔特方格弹窗 -->

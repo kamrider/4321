@@ -98,6 +98,41 @@ const canTrain = computed(() => {
 // 添加提交状态
 const isSubmitting = ref(false)
 
+// 添加计时器相关的响应式变量
+const time = ref(0)
+const timerInterval = ref<number | null>(null)
+const timerStates = ref(new Map<string, number>())
+
+// 添加计时器相关函数
+const startTimer = () => {
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+  }
+  timerInterval.value = setInterval(() => {
+    time.value++
+  }, 10)
+}
+
+const saveCurrentTimerState = () => {
+  if (activeItem.value) {
+    timerStates.value.set(activeItem.value.originalFileId, time.value)
+  }
+}
+
+const loadTimerState = (fileId: string) => {
+  time.value = timerStates.value.get(fileId) || 0
+  startTimer()
+}
+
+// 添加计算属性
+const formattedTime = computed(() => {
+  const totalMs = time.value * 10
+  const minutes = Math.floor(totalMs / 60000)
+  const seconds = Math.floor((totalMs % 60000) / 1000)
+  const ms = Math.floor((totalMs % 1000) / 10)
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
+})
+
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
@@ -126,11 +161,25 @@ onMounted(async () => {
   }
 })
 
-const handleViewDetail = (item: ExportedItem['mistakes'][0]) => {
+const handleViewDetail = (item: ExportedMistake) => {
   activeItem.value = item
   dialogVisible.value = true
   showAnswer.value = false
-  isTraining.value = true
+  loadTimerState(item.originalFileId)
+}
+
+const handleCloseDialog = () => {
+  if (activeItem.value) {
+    saveCurrentTimerState()
+  }
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+  dialogVisible.value = false
+  activeItem.value = null
+  time.value = 0
+  showAnswer.value = false
 }
 
 const handleDelete = async (date: string) => {
@@ -327,8 +376,19 @@ const getItemClass = (mistake: ExportedMistake) => {
     v-model="dialogVisible"
     title="错题详情"
     width="80%"
+    height="80vh"
+    :before-close="handleCloseDialog"
+    class="mistake-detail-dialog"
   >
     <div class="detail-container" v-if="activeItem">
+      <!-- 添加计时器显示 -->
+      <div class="timer-container">
+        <div class="timer-display">
+          <el-icon class="timer-icon"><Timer /></el-icon>
+          <span class="timer-text">{{ formattedTime }}</span>
+        </div>
+      </div>
+      
       <div class="mistake-section">
         <el-image 
           :src="activeItem.preview"
@@ -622,5 +682,87 @@ const getItemClass = (mistake: ExportedMistake) => {
 .training-control .el-button.is-disabled {
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.mistake-detail-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  height: 80vh;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.detail-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  position: relative;
+}
+
+.mistake-section,
+.answer-section {
+  width: 100%;
+  height: calc(100% - 100px); /* 减去其他元素的高度 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.answer-item {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.timer-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  padding: 8px;
+  background-color: rgba(245, 247, 250, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: center;
+}
+
+.timer-display {
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  min-width: 180px;
+  justify-content: center;
+  background-color: white;
+}
+
+.timer-icon {
+  margin-right: 8px;
+  font-size: 24px;
+}
+
+.timer-text {
+  font-family: monospace;
+  font-weight: bold;
+  min-width: 120px;
+  text-align: center;
 }
 </style> 

@@ -15,9 +15,7 @@ const handleMenuClick = (route: string) => {
     <div class="main-content">
       <div class="content-wrapper">
         <router-view v-slot="{ Component }">
-          <keep-alive :include="['History', 'Mistake', 'ExportedMistakes']">
-            <component :is="Component" />
-          </keep-alive>
+          <component :is="Component" />
         </router-view>
       </div>
     </div>

@@ -9,7 +9,7 @@ import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
 import type { TrainingConfig } from './training-manager'
 import { v4 as uuidv4 } from 'uuid'
-import { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer } from 'docx'
+import { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer, SectionType } from 'docx'
 import sharp from 'sharp'
 
 const require = createRequire(import.meta.url)
@@ -1933,10 +1933,10 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
       throw new Error('找不到指定日期的错题文件')
     }
 
-    // 让用户选择保存位置
+    // 让用户选择保存位置（加入用户名）
     const result = await dialog.showSaveDialog({
       title: '保存 Word 文档',
-      defaultPath: `错题集_${date}.docx`,
+      defaultPath: `${userName}_错题集_${date}.docx`,
       filters: [{ name: 'Word 文档', extensions: ['docx'] }]
     })
 
@@ -1946,14 +1946,17 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
 
     const doc = new Document({
       sections: [{
-        properties: {},
+        properties: {
+          // 移除分页符
+          type: SectionType.CONTINUOUS
+        },
         children: [
           new Paragraph({
             text: `${userName} - 错题集`,
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
             style: {
-              size: 32, // 标题字体大小
+              size: 32,
               bold: true
             }
           }),

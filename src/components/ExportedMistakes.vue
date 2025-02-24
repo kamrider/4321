@@ -7,7 +7,7 @@ defineComponent({
 
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Delete, Check, Close, Printer } from '@element-plus/icons-vue'
+import { Document, Delete, Check, Close, Printer, ArrowDown } from '@element-plus/icons-vue'
 
 interface ExportedMistake {
   path: string
@@ -308,12 +308,12 @@ const getItemClass = (mistake: ExportedMistake) => {
 }
 
 // 添加导出到Word的方法
-const handleExportToWord = async (date: string) => {
+const handleExportToWord = async (date: string, type: string = 'alternate') => {
   if (exportingDates.value[date]) return
   
   exportingDates.value[date] = true
   try {
-    const result = await window.ipcRenderer.file.exportDateToWord(date)
+    const result = await window.ipcRenderer.file.exportDateToWord(date, type)
     
     if (result.success) {
       ElMessage.success('导出成功')
@@ -356,14 +356,21 @@ const handleExportToWord = async (date: string) => {
               </div>
               <!-- 添加导出按钮组 -->
               <div class="export-actions">
-                <el-button
-                  type="primary"
-                  :icon="Printer"
-                  @click="handleExportToWord(item.date)"
-                  :loading="exportingDates[item.date]"
-                >
-                  导出到Word
-                </el-button>
+                <el-dropdown @command="(type) => handleExportToWord(item.date, type)">
+                  <el-button type="primary" :loading="exportingDates[item.date]">
+                    <el-icon><Printer /></el-icon>
+                    导出到Word
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="alternate">错题答案交替</el-dropdown-item>
+                      <el-dropdown-item command="mistakesOnly">仅导出错题</el-dropdown-item>
+                      <el-dropdown-item command="answersOnly">仅导出答案</el-dropdown-item>
+                      <el-dropdown-item command="separated">错题答案分开</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </div>
             

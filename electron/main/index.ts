@@ -9,7 +9,7 @@ import { MetadataManager } from './metadata'
 import { TrainingManager } from './training-manager'
 import type { TrainingConfig } from './training-manager'
 import { v4 as uuidv4 } from 'uuid'
-import { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer, SectionType } from 'docx'
+import { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer, SectionType, PageBreak } from 'docx'
 import sharp from 'sharp'
 
 const require = createRequire(import.meta.url)
@@ -1917,7 +1917,7 @@ ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
 })
 
 // 添加导出到 Word 的处理函数
-ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
+ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: string = 'alternate') => {
   try {
     const exportBaseDir = getExportBaseDir()
     const datePath = path.join(exportBaseDir, date)
@@ -1991,6 +1991,14 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
       }]
     })
 
+    // 根据导出类型处理内容
+    const contentSection = {
+      properties: {
+        type: SectionType.CONTINUOUS
+      },
+      children: []
+    }
+
     // 读取并排序错题文件
     const mistakes = fs.readdirSync(mistakesDir)
       .filter(file => !file.startsWith('.'))
@@ -2000,106 +2008,183 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
         return numA - numB
       })
 
-    // 创建一个单独的section来包含所有的错题和答案
-    const contentSection = {
-      properties: {
-        type: SectionType.CONTINUOUS  // 添加这行确保连续模式
-      },
-      children: []
-    }
+    switch (exportType) {
+      case 'alternate':
+        // 错题答案交替显示（当前实现）
+        for (const mistake of mistakes) {
+          const mistakeNumber = mistake.match(/\d+/)?.[0]
+          if (!mistakeNumber) continue
 
-    // 添加每个错题和对应的答案
-    for (const mistake of mistakes) {
-      const mistakeNumber = mistake.match(/\d+/)?.[0]
-      if (!mistakeNumber) continue
-
-      // 添加错题
-      const mistakePath = path.join(mistakesDir, mistake)
-      const mistakeBuffer = fs.readFileSync(mistakePath)
-
-      // 获取图片尺寸
-      const mistakeImage = await sharp(mistakePath).metadata()
-      const mistakeWidth = mistakeImage.width || 600
-      const mistakeHeight = mistakeImage.height || 800
-      const ratio = 600 / mistakeWidth
-      const scaledHeight = Math.round(mistakeHeight * ratio)
-
-      contentSection.children.push(
-        new Paragraph({
-          text: `错题 ${mistakeNumber}`,
-          style: {
-            size: 14, // 错题标题字体大小
-            color: '000000' // 黑色
-          },
-          spacing: {
-            before: 200,
-            after: 100
-          }
-        }),
-        new Paragraph({
-          children: [
-            new ImageRun({
-              data: mistakeBuffer,
-              transformation: {
-                width: 600,
-                height: scaledHeight
-              }
+          const mistakePath = path.join(mistakesDir, mistake)
+          const mistakeBuffer = fs.readFileSync(mistakePath)
+          const mistakeImage = await sharp(mistakePath).metadata()
+          
+          contentSection.children.push(
+            new Paragraph({
+              text: `错题 ${mistakeNumber}`,
+              style: { size: 14 },
+              spacing: { before: 200, after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: mistakeBuffer,
+                  transformation: {
+                    width: 600,
+                    height: Math.round((mistakeImage.height || 800) * (600 / (mistakeImage.width || 600)))
+                  }
+                })
+              ],
+              spacing: { after: 200 }
             })
-          ],
-          spacing: {
-            after: 200
+          )
+        }
+        break;
+
+      case 'mistakesOnly':
+        // 只显示错题
+        for (const mistake of mistakes) {
+          const mistakeNumber = mistake.match(/\d+/)?.[0]
+          if (!mistakeNumber) continue
+
+          const mistakePath = path.join(mistakesDir, mistake)
+          const mistakeBuffer = fs.readFileSync(mistakePath)
+          const mistakeImage = await sharp(mistakePath).metadata()
+          
+          contentSection.children.push(
+            new Paragraph({
+              text: `错题 ${mistakeNumber}`,
+              style: { size: 14 },
+              spacing: { before: 200, after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: mistakeBuffer,
+                  transformation: {
+                    width: 600,
+                    height: Math.round((mistakeImage.height || 800) * (600 / (mistakeImage.width || 600)))
+                  }
+                })
+              ],
+              spacing: { after: 200 }
+            })
+          )
+        }
+        break;
+
+      case 'answersOnly':
+        // 只显示答案
+        for (const mistake of mistakes) {
+          const mistakeNumber = mistake.match(/\d+/)?.[0]
+          if (!mistakeNumber) continue
+
+          const answers = fs.readdirSync(answersDir)
+            .filter(file => file.startsWith(`${mistakeNumber}.`))
+            .sort()
+
+          for (const answer of answers) {
+            const answerPath = path.join(answersDir, answer)
+            const answerBuffer = fs.readFileSync(answerPath)
+            const answerImage = await sharp(answerPath).metadata()
+
+            contentSection.children.push(
+              new Paragraph({
+                text: `答案 ${mistakeNumber}`,
+                style: { size: 14 },
+                spacing: { before: 200, after: 100 }
+              }),
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    data: answerBuffer,
+                    transformation: {
+                      width: 600,
+                      height: Math.round((answerImage.height || 800) * (600 / (answerImage.width || 600)))
+                    }
+                  })
+                ],
+                spacing: { after: 200 }
+              })
+            )
           }
-        })
-      )
+        }
+        break;
 
-      // 查找并添加对应的答案
-      const answers = fs.readdirSync(answersDir)
-        .filter(file => file.startsWith(`${mistakeNumber}.`))
-        .sort((a, b) => {
-          const ansNumA = parseInt(a.split('.')[1] || '0')
-          const ansNumB = parseInt(b.split('.')[1] || '0')
-          return ansNumA - ansNumB
-        })
+      case 'separated':
+        // 先显示所有错题
+        for (const mistake of mistakes) {
+          const mistakeNumber = mistake.match(/\d+/)?.[0]
+          if (!mistakeNumber) continue
 
-      for (const answer of answers) {
-        const answerPath = path.join(answersDir, answer)
-        const answerBuffer = fs.readFileSync(answerPath)
-        
-        // 获取答案图片尺寸
-        const answerImage = await sharp(answerPath).metadata()
-        const answerWidth = answerImage.width || 600
-        const answerHeight = answerImage.height || 800
-        const answerRatio = 600 / answerWidth
-        const answerScaledHeight = Math.round(answerHeight * answerRatio)
+          const mistakePath = path.join(mistakesDir, mistake)
+          const mistakeBuffer = fs.readFileSync(mistakePath)
+          const mistakeImage = await sharp(mistakePath).metadata()
 
+          contentSection.children.push(
+            new Paragraph({
+              text: `错题 ${mistakeNumber}`,
+              style: { size: 14 },
+              spacing: { before: 200, after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: mistakeBuffer,
+                  transformation: {
+                    width: 600,
+                    height: Math.round((mistakeImage.height || 800) * (600 / (mistakeImage.width || 600)))
+                  }
+                })
+              ],
+              spacing: { after: 200 }
+            })
+          )
+        }
+
+        // 添加分页符
         contentSection.children.push(
           new Paragraph({
-            text: `答案 ${mistakeNumber}`,
-            style: {
-              size: 14, // 答案标题字体大小
-              color: '000000' // 黑色
-            },
-            spacing: {
-              before: 200,
-              after: 100
-            }
-          }),
-          new Paragraph({
-            children: [
-              new ImageRun({
-                data: answerBuffer,
-                transformation: {
-                  width: 600,
-                  height: answerScaledHeight
-                }
-              })
-            ],
-            spacing: {
-              after: 200
-            }
+            children: [new PageBreak()]
           })
         )
-      }
+
+        // 然后显示所有答案
+        for (const mistake of mistakes) {
+          const mistakeNumber = mistake.match(/\d+/)?.[0]
+          if (!mistakeNumber) continue
+
+          const answers = fs.readdirSync(answersDir)
+            .filter(file => file.startsWith(`${mistakeNumber}.`))
+            .sort()
+
+          for (const answer of answers) {
+            const answerPath = path.join(answersDir, answer)
+            const answerBuffer = fs.readFileSync(answerPath)
+            const answerImage = await sharp(answerPath).metadata()
+
+            contentSection.children.push(
+              new Paragraph({
+                text: `答案 ${mistakeNumber}`,
+                style: { size: 14 },
+                spacing: { before: 200, after: 100 }
+              }),
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    data: answerBuffer,
+                    transformation: {
+                      width: 600,
+                      height: Math.round((answerImage.height || 800) * (600 / (answerImage.width || 600)))
+                    }
+                  })
+                ],
+                spacing: { after: 200 }
+              })
+            )
+          }
+        }
+        break;
     }
 
     // 将内容section添加到文档中

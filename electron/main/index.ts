@@ -1924,6 +1924,11 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
     const mistakesDir = path.join(datePath, '错题')
     const answersDir = path.join(datePath, '答案')
 
+    // 获取用户名（从路径中提取）
+    const pathParts = exportBaseDir.split(path.sep)
+    const membersIndex = pathParts.indexOf('members')
+    const userName = membersIndex >= 0 && pathParts[membersIndex + 1] ? pathParts[membersIndex + 1] : '未知用户'
+
     if (!fs.existsSync(mistakesDir) || !fs.existsSync(answersDir)) {
       throw new Error('找不到指定日期的错题文件')
     }
@@ -1944,18 +1949,35 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
         properties: {},
         children: [
           new Paragraph({
-            text: `错题集 - ${date}`,
+            text: `${userName} - 错题集`,
             heading: HeadingLevel.HEADING_1,
-            alignment: AlignmentType.CENTER
+            alignment: AlignmentType.CENTER,
+            style: {
+              size: 32, // 标题字体大小
+              bold: true
+            }
+          }),
+          new Paragraph({
+            text: date,
+            heading: HeadingLevel.HEADING_2,
+            alignment: AlignmentType.CENTER,
+            style: {
+              size: 24 // 日期字体大小
+            }
           }),
           new Paragraph({
             text: `共 ${fs.readdirSync(mistakesDir).filter(file => !file.startsWith('.')).length} 道错题`,
-            heading: HeadingLevel.HEADING_2,
-            alignment: AlignmentType.CENTER
+            alignment: AlignmentType.CENTER,
+            style: {
+              size: 20 // 错题数量字体大小
+            }
           }),
           new Paragraph({
             text: `导出时间：${new Date().toLocaleString('zh-CN')}`,
-            alignment: AlignmentType.CENTER
+            alignment: AlignmentType.CENTER,
+            style: {
+              size: 16 // 导出时间字体大小
+            }
           }),
           new Paragraph({
             text: '',
@@ -2001,9 +2023,12 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
       contentSection.children.push(
         new Paragraph({
           text: `错题 ${mistakeNumber}`,
-          heading: HeadingLevel.HEADING_2,
+          style: {
+            size: 14, // 错题标题字体大小
+            color: '000000' // 黑色
+          },
           spacing: {
-            before: 300,
+            before: 200,
             after: 100
           }
         }),
@@ -2046,7 +2071,10 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
         contentSection.children.push(
           new Paragraph({
             text: `答案 ${mistakeNumber}`,
-            heading: HeadingLevel.HEADING_2,
+            style: {
+              size: 14, // 答案标题字体大小
+              color: '000000' // 黑色
+            },
             spacing: {
               before: 200,
               after: 100

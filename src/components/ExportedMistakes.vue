@@ -356,23 +356,14 @@ const handleExportToWord = async (date: string) => {
               </div>
               <!-- 添加导出按钮组 -->
               <div class="export-actions">
-                <el-button-group>
-                  <el-button
-                    type="primary"
-                    :icon="Printer"
-                    @click="handleExportToWord(item.date)"
-                    :loading="exportingDates[item.date]"
-                  >
-                    导出到Word
-                  </el-button>
-                  <el-button
-                    type="danger"
-                    :icon="Delete"
-                    @click="handleDelete(item.date)"
-                  >
-                    删除
-                  </el-button>
-                </el-button-group>
+                <el-button
+                  type="primary"
+                  :icon="Printer"
+                  @click="handleExportToWord(item.date)"
+                  :loading="exportingDates[item.date]"
+                >
+                  导出到Word
+                </el-button>
               </div>
             </div>
             

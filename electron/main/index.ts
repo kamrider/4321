@@ -2010,11 +2010,12 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
 
     switch (exportType) {
       case 'alternate':
-        // 错题答案交替显示（当前实现）
+        // 错题答案交替显示
         for (const mistake of mistakes) {
           const mistakeNumber = mistake.match(/\d+/)?.[0]
           if (!mistakeNumber) continue
 
+          // 添加错题
           const mistakePath = path.join(mistakesDir, mistake)
           const mistakeBuffer = fs.readFileSync(mistakePath)
           const mistakeImage = await sharp(mistakePath).metadata()
@@ -2038,6 +2039,37 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
               spacing: { after: 200 }
             })
           )
+
+          // 紧接着添加对应的答案
+          const answers = fs.readdirSync(answersDir)
+            .filter(file => file.startsWith(`${mistakeNumber}.`))
+            .sort()
+
+          for (const answer of answers) {
+            const answerPath = path.join(answersDir, answer)
+            const answerBuffer = fs.readFileSync(answerPath)
+            const answerImage = await sharp(answerPath).metadata()
+
+            contentSection.children.push(
+              new Paragraph({
+                text: `答案 ${mistakeNumber}`,
+                style: { size: 14 },
+                spacing: { before: 200, after: 100 }
+              }),
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    data: answerBuffer,
+                    transformation: {
+                      width: 600,
+                      height: Math.round((answerImage.height || 800) * (600 / (answerImage.width || 600)))
+                    }
+                  })
+                ],
+                spacing: { after: 200 }
+              })
+            )
+          }
         }
         break;
 
@@ -2109,7 +2141,7 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
             )
           }
         }
-        break;
+        break;  // 这里缺少了 break 语句
 
       case 'separated':
         // 先显示所有错题

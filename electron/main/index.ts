@@ -1947,12 +1947,11 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
     const doc = new Document({
       sections: [{
         properties: {
-          // 移除分页符
           type: SectionType.CONTINUOUS
         },
         children: [
           new Paragraph({
-            text: `${userName} - 错题集`,
+            text: `${userName} - 错题集`,  // 主标题
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
             style: {
@@ -1961,11 +1960,11 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
             }
           }),
           new Paragraph({
-            text: date,
+            text: date,  // 副标题（日期）
             heading: HeadingLevel.HEADING_2,
             alignment: AlignmentType.CENTER,
             style: {
-              size: 24 // 日期字体大小
+              size: 24
             }
           }),
           new Paragraph({
@@ -2003,7 +2002,9 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
 
     // 创建一个单独的section来包含所有的错题和答案
     const contentSection = {
-      properties: {},
+      properties: {
+        type: SectionType.CONTINUOUS  // 添加这行确保连续模式
+      },
       children: []
     }
 

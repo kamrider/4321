@@ -208,6 +208,7 @@ export interface IpcRenderer {
       success: boolean
       error?: string
     }>
+    exportDateToWord: (date: string) => Promise<Result>
   }
 }
 
@@ -365,6 +366,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       ipcRenderer.invoke('getFrozen', fileId),
     setMultipleFrozen: (fileIds: string[], isFrozen: boolean) => 
       ipcRenderer.invoke('setMultipleFrozen', fileIds, isFrozen),
+    exportDateToWord: (date: string) => ipcRenderer.invoke('file:export-date-to-word', date),
   }
 })
 
@@ -530,6 +532,7 @@ declare global {
           success: boolean
           error?: string
         }>
+        exportDateToWord: (date: string) => Promise<Result>
       }
     }
   }

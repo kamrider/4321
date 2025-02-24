@@ -7,7 +7,7 @@ defineComponent({
 
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Delete, Check, Close } from '@element-plus/icons-vue'
+import { Document, Delete, Check, Close, Printer } from '@element-plus/icons-vue'
 
 interface ExportedMistake {
   path: string
@@ -132,6 +132,9 @@ const formattedTime = computed(() => {
   const ms = Math.floor((totalMs % 1000) / 10)
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
 })
+
+// 添加导出状态
+const exportingDates = ref<Record<string, boolean>>({})
 
 onMounted(async () => {
   try {
@@ -303,6 +306,27 @@ const getItemClass = (mistake: ExportedMistake) => {
     'training-export': mistake.exportType === 'training'
   }
 }
+
+// 添加导出到Word的方法
+const handleExportToWord = async (date: string) => {
+  if (exportingDates.value[date]) return
+  
+  exportingDates.value[date] = true
+  try {
+    const result = await window.ipcRenderer.file.exportDateToWord(date)
+    
+    if (result.success) {
+      ElMessage.success('导出成功')
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败：' + (error.message || '未知错误'))
+  } finally {
+    exportingDates.value[date] = false
+  }
+}
 </script>
 
 <template>
@@ -329,6 +353,26 @@ const getItemClass = (mistake: ExportedMistake) => {
                 <el-icon><Document /></el-icon>
                 <span>{{ formatDate(item.date) }}</span>
                 <span class="count">(共 {{ item.mistakes.length }} 题)</span>
+              </div>
+              <!-- 添加导出按钮组 -->
+              <div class="export-actions">
+                <el-button-group>
+                  <el-button
+                    type="primary"
+                    :icon="Printer"
+                    @click="handleExportToWord(item.date)"
+                    :loading="exportingDates[item.date]"
+                  >
+                    导出到Word
+                  </el-button>
+                  <el-button
+                    type="danger"
+                    :icon="Delete"
+                    @click="handleDelete(item.date)"
+                  >
+                    删除
+                  </el-button>
+                </el-button-group>
               </div>
             </div>
             
@@ -478,9 +522,13 @@ const getItemClass = (mistake: ExportedMistake) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #eee;
+  padding: 16px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.export-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .date-info {

@@ -1917,24 +1917,22 @@ ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
 })
 
 // 添加导出到 Word 的处理函数
-ipcMain.handle('file:export-to-word', async (_, items: Array<{
-  mistake: {
-    path: string
-    metadata?: any
-  }
-  answer?: {
-    path: string
-    metadata?: any
-  }
-}>) => {
+ipcMain.handle('file:export-date-to-word', async (_, date: string) => {
   try {
+    const exportBaseDir = getExportBaseDir()
+    const datePath = path.join(exportBaseDir, date)
+    const mistakesDir = path.join(datePath, '错题')
+    const answersDir = path.join(datePath, '答案')
+
+    if (!fs.existsSync(mistakesDir) || !fs.existsSync(answersDir)) {
+      throw new Error('找不到指定日期的错题文件')
+    }
+
     // 让用户选择保存位置
     const result = await dialog.showSaveDialog({
       title: '保存 Word 文档',
-      defaultPath: `错题集_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.docx`,
-      filters: [
-        { name: 'Word 文档', extensions: ['docx'] }
-      ]
+      defaultPath: `错题集_${date}.docx`,
+      filters: [{ name: 'Word 文档', extensions: ['docx'] }]
     })
 
     if (result.canceled || !result.filePath) {
@@ -1946,66 +1944,134 @@ ipcMain.handle('file:export-to-word', async (_, items: Array<{
         properties: {},
         children: [
           new Paragraph({
-            text: "错题集",
+            text: `错题集 - ${date}`,
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            text: `共 ${fs.readdirSync(mistakesDir).filter(file => !file.startsWith('.')).length} 道错题`,
+            heading: HeadingLevel.HEADING_2,
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            text: `导出时间：${new Date().toLocaleString('zh-CN')}`,
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            text: '',
+            spacing: {
+              after: 200
+            }
           })
         ]
       }]
     })
 
-    // 添加每个错题和答案
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      
-      // 获取图片的实际尺寸
-      const mistakeImageBuffer = fs.readFileSync(item.mistake.path)
-      
-      // 添加错题标题和图片
-      doc.addSection({
-        children: [
+    // 读取并排序错题文件
+    const mistakes = fs.readdirSync(mistakesDir)
+      .filter(file => !file.startsWith('.'))
+      .sort((a, b) => {
+        const numA = parseInt(a.match(/\d+/)?.[0] || '0')
+        const numB = parseInt(b.match(/\d+/)?.[0] || '0')
+        return numA - numB
+      })
+
+    // 创建一个单独的section来包含所有的错题和答案
+    const contentSection = {
+      properties: {},
+      children: []
+    }
+
+    // 添加每个错题和对应的答案
+    for (const mistake of mistakes) {
+      const mistakeNumber = mistake.match(/\d+/)?.[0]
+      if (!mistakeNumber) continue
+
+      // 添加错题
+      const mistakePath = path.join(mistakesDir, mistake)
+      const mistakeBuffer = fs.readFileSync(mistakePath)
+
+      // 获取图片尺寸
+      const mistakeImage = await sharp(mistakePath).metadata()
+      const mistakeWidth = mistakeImage.width || 600
+      const mistakeHeight = mistakeImage.height || 800
+      const ratio = 600 / mistakeWidth
+      const scaledHeight = Math.round(mistakeHeight * ratio)
+
+      contentSection.children.push(
+        new Paragraph({
+          text: `错题 ${mistakeNumber}`,
+          heading: HeadingLevel.HEADING_2,
+          spacing: {
+            before: 300,
+            after: 100
+          }
+        }),
+        new Paragraph({
+          children: [
+            new ImageRun({
+              data: mistakeBuffer,
+              transformation: {
+                width: 600,
+                height: scaledHeight
+              }
+            })
+          ],
+          spacing: {
+            after: 200
+          }
+        })
+      )
+
+      // 查找并添加对应的答案
+      const answers = fs.readdirSync(answersDir)
+        .filter(file => file.startsWith(`${mistakeNumber}.`))
+        .sort((a, b) => {
+          const ansNumA = parseInt(a.split('.')[1] || '0')
+          const ansNumB = parseInt(b.split('.')[1] || '0')
+          return ansNumA - ansNumB
+        })
+
+      for (const answer of answers) {
+        const answerPath = path.join(answersDir, answer)
+        const answerBuffer = fs.readFileSync(answerPath)
+        
+        // 获取答案图片尺寸
+        const answerImage = await sharp(answerPath).metadata()
+        const answerWidth = answerImage.width || 600
+        const answerHeight = answerImage.height || 800
+        const answerRatio = 600 / answerWidth
+        const answerScaledHeight = Math.round(answerHeight * answerRatio)
+
+        contentSection.children.push(
           new Paragraph({
-            text: `错题 ${i + 1}`,
-            heading: HeadingLevel.HEADING_2
+            text: `答案 ${mistakeNumber}`,
+            heading: HeadingLevel.HEADING_2,
+            spacing: {
+              before: 200,
+              after: 100
+            }
           }),
           new Paragraph({
             children: [
               new ImageRun({
-                data: mistakeImageBuffer,
+                data: answerBuffer,
                 transformation: {
                   width: 600,
-                  height: 0 // 设置为0让图片保持原始比例
+                  height: answerScaledHeight
                 }
               })
-            ]
+            ],
+            spacing: {
+              after: 200
+            }
           })
-        ]
-      })
-
-      // 如果有答案，添加答案
-      if (item.answer) {
-        const answerImageBuffer = fs.readFileSync(item.answer.path)
-        doc.addSection({
-          children: [
-            new Paragraph({
-              text: `答案 ${i + 1}`,
-              heading: HeadingLevel.HEADING_2
-            }),
-            new Paragraph({
-              children: [
-                new ImageRun({
-                  data: answerImageBuffer,
-                  transformation: {
-                    width: 600,
-                    height: 0 // 设置为0让图片保持原始比例
-                  }
-                })
-              ]
-            })
-          ]
-        })
+        )
       }
     }
+
+    // 将内容section添加到文档中
+    doc.addSection(contentSection)
 
     // 保存文档
     const buffer = await Packer.toBuffer(doc)
@@ -2021,7 +2087,7 @@ ipcMain.handle('file:export-to-word', async (_, items: Array<{
     console.error('导出到 Word 失败:', error)
     return {
       success: false,
-      error: error.message
+      error: error.message || '导出失败'
     }
   }
 })

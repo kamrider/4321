@@ -1495,8 +1495,19 @@ ipcMain.handle('file:export-mistake', async (_, params: {
 }) => {
   try {
     const exportBaseDir = getExportBaseDir()
+    
+    // 获取当前日期和时间
     const today = new Date()
-    const dateStr = today.toLocaleDateString('zh-CN', {
+    const currentHour = today.getHours()
+    
+    // 如果当前时间是下午6点之后，使用明天的日期
+    let exportDate = new Date(today)
+    if (currentHour >= 18) {
+      exportDate.setDate(exportDate.getDate() + 1)
+    }
+    
+    // 格式化日期字符串
+    const dateStr = exportDate.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
@@ -1514,7 +1525,7 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     fs.mkdirSync(answersDir, { recursive: true })
     fs.mkdirSync(metadataDir, { recursive: true })
     fs.mkdirSync(previewsDir, { recursive: true })
-
+    
     // 获取当前目录下已存在的错题数量，用于生成新的序号
     const existingMistakes = fs.readdirSync(mistakesDir)
     const mistakeNumber = existingMistakes.length + 1

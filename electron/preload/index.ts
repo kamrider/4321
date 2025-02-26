@@ -233,8 +233,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
   // 添加文件操作相关的方法
   uploadFile: {
-    // 选择文件
-    select: () => ipcRenderer.invoke('file:select'),
+    // 选择文件 - 修改返回类型为字符串数组
+    select: () => ipcRenderer.invoke('file:select') as Promise<string[]>,
     
     // 获取预览
     getPreview: (filePath: string) => ipcRenderer.invoke('file:preview', filePath),

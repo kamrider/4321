@@ -399,30 +399,36 @@ ipcMain.handle('open-win', (_, arg) => {
 
 // 修改文件选择处理
 ipcMain.handle('file:select', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile'],
-    filters: [
-      { name: '图片文件', extensions: ['jpg', 'jpeg', 'png'] },
-      { name: '所有文件', extensions: ['*'] },
-    ],
-  });
-  
-  if (result.canceled || result.filePaths.length === 0) {
-    return null;
-  }
-
   try {
-    const sourcePath = result.filePaths[0];
-    const fileName = path.basename(sourcePath);
-    const tempPath = path.join(getTempDirectory(), `temp-${Date.now()}-${fileName}`);
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'], // 添加 multiSelections 支持多选
+      filters: [
+        { name: '图片文件', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] }
+      ]
+    })
     
-    // 复制到临时目录
-    await fs.promises.copyFile(sourcePath, tempPath);
+    if (result.canceled || result.filePaths.length === 0) {
+      return []
+    }
     
-    return tempPath;
+    // 验证文件路径
+    const validPaths = validateFilePaths(result.filePaths)
+    
+    // 处理所有选择的文件
+    const tempPaths = []
+    for (const filePath of validPaths) {
+      const fileName = path.basename(filePath)
+      const tempPath = path.join(getTempDirectory(), fileName)
+      
+      // 复制到临时目录
+      await fs.promises.copyFile(filePath, tempPath)
+      tempPaths.push(tempPath)
+    }
+    
+    return tempPaths
   } catch (error) {
-    console.error('复制文件到临时目录失败:', error);
-    throw error;
+    console.error('选择文件失败:', error)
+    throw error
   }
 })
 

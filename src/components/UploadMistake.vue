@@ -68,17 +68,24 @@ const handleFileSelect = async () => {
   
   try {
     console.log('调用文件选择对话框...')
-    const tempPath = await window.ipcRenderer.uploadFile.select()
-    console.log('选择的文件路径:', tempPath)
+    const tempPaths = await window.ipcRenderer.uploadFile.select()
+    console.log('选择的文件路径:', tempPaths)
     
-    if (tempPath) {
-      const preview = await window.ipcRenderer.uploadFile.getPreview(tempPath)
-      fileList.value.push({
-        path: tempPath,
-        preview: preview.previewUrl,
-        progress: 0,
-        status: 'idle'
-      })
+    if (tempPaths && tempPaths.length > 0) {
+      // 处理多个文件
+      for (const tempPath of tempPaths) {
+        const preview = await window.ipcRenderer.uploadFile.getPreview(tempPath)
+        fileList.value.push({
+          path: tempPath,
+          preview: preview.previewUrl,
+          progress: 0,
+          status: 'idle'
+        })
+      }
+      
+      if (tempPaths.length > 1) {
+        ElMessage.success(`已添加 ${tempPaths.length} 个文件`)
+      }
     }
   } catch (error) {
     console.error('文件选择错误:', error)

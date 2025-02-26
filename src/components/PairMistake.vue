@@ -380,6 +380,38 @@ const handleConfirm = () => {
   border-radius: 8px;
   padding: 12px;
   transition: all 0.3s ease;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pairSuccess {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(230, 162, 60, 0); }
+  50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(230, 162, 60, 0.5); }
+  100% { transform: scale(1); box-shadow: 0 0 5px rgba(230, 162, 60, 0.3); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.preview-item.is-paired {
+  animation: pairSuccess 0.6s ease-out;
+}
+
+.preview-item.no-pair {
+  animation: shake 0.5s ease-in-out;
 }
 
 .preview-image {
@@ -390,10 +422,22 @@ const handleConfirm = () => {
   object-fit: contain;
   border-radius: 4px;
   margin-bottom: 8px;
+  transition: transform 0.3s ease;
+}
+
+.preview-image:hover {
+  transform: scale(1.03);
 }
 
 .file-info {
   margin-top: 8px;
+  transition: background-color 0.2s ease;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.file-info:hover {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .file-name {
@@ -460,25 +504,17 @@ const handleConfirm = () => {
 .preview-item.is-dragging {
   opacity: 0.5;
   transform: scale(0.95);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  z-index: 10;
 }
 
 .preview-item.can-pair {
   border-color: var(--el-color-success);
   box-shadow: 0 0 15px var(--el-color-success);
   transform: scale(1.05);
+  animation: pulse 1.5s infinite;
 }
 
-.preview-item.no-pair {
-  border-color: var(--el-color-warning);
-  box-shadow: 0 0 15px var(--el-color-warning);
-}
-
-/* 添加拖拽时的动画效果 */
-.preview-item {
-  transition: all 0.3s ease, transform 0.2s ease;
-}
-
-/* 配对成功时的样式 */
 .preview-item.is-paired {
   border-color: #E6A23C;
   background-color: #fdf6ec;
@@ -586,6 +622,18 @@ const handleConfirm = () => {
   flex-direction: column;
   gap: 20px;
   margin-top: 20px;
+  animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .answer-item {
@@ -646,10 +694,13 @@ const handleConfirm = () => {
   z-index: 2001; /* 确保在弹窗之上 */
 }
 
-.answer-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.answer-control button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.answer-control button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .answer-item {
@@ -677,5 +728,61 @@ const handleConfirm = () => {
   color: #606266;
   z-index: 1;
   text-align: center;
+}
+
+/* 添加按钮悬停效果 */
+.confirm-area button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(64, 158, 255, 0.3);
+}
+
+/* 添加确认按钮动画 */
+.confirm-area button:after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%);
+  transform-origin: 50% 50%;
+}
+
+.confirm-area button:focus:not(:active)::after {
+  animation: ripple 1s ease-out;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0, 0);
+    opacity: 0.5;
+  }
+  20% {
+    transform: scale(25, 25);
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(40, 40);
+  }
+}
+
+/* 弹窗动画 */
+.mistake-detail-dialog :deep(.el-dialog) {
+  animation: dialogFadeIn 0.3s ease-out;
+}
+
+@keyframes dialogFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

@@ -417,11 +417,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   <!-- 详情弹窗 -->
   <el-dialog
     v-model="dialogVisible"
-    title="错题详情"
     width="80%"
     height="80vh"
+    :show-close="true"
     :before-close="handleCloseDialog"
     class="mistake-detail-dialog"
+    title=""
   >
     <div class="detail-container" v-if="activeItem">
       <!-- 添加计时器显示 -->
@@ -944,21 +945,20 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 
 .timer-container {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
   padding: 8px;
-  background-color: rgba(245, 247, 250, 0.9);
+  background-color: transparent;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: center;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .timer-container:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateX(-50%) scale(1.05);
 }
 
 .timer-display {
@@ -970,20 +970,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   border: 2px solid transparent;
   min-width: 180px;
   justify-content: center;
-  background-color: white;
-  animation: timerPulse 2s infinite;
-}
-
-@keyframes timerPulse {
-  0% {
-    box-shadow: 0 0 0 rgba(var(--el-color-primary-rgb), 0.1);
-  }
-  50% {
-    box-shadow: 0 0 10px rgba(var(--el-color-primary-rgb), 0.3);
-  }
-  100% {
-    box-shadow: 0 0 0 rgba(var(--el-color-primary-rgb), 0.1);
-  }
+  background-color: transparent;
 }
 
 .timer-icon {

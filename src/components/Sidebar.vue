@@ -69,6 +69,9 @@ const handleSelect = (index: string) => {
   top: 0;
   bottom: 0;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  overflow: hidden;
+  will-change: width;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
@@ -87,6 +90,9 @@ const handleSelect = (index: string) => {
   height: 56px;
   line-height: 56px;
   padding: 0 20px !important;
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
 }
 
 :deep(.el-menu-item.is-active) {
@@ -98,6 +104,7 @@ const handleSelect = (index: string) => {
 :deep(.el-menu-item:hover) {
   background-color: #eef5fc !important;
   color: #409EFF !important;
+  transform: translateX(5px);
 }
 
 /* 图标样式 */
@@ -106,10 +113,27 @@ const handleSelect = (index: string) => {
   vertical-align: middle;
   margin-right: 5px;
   color: inherit;
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+:deep(.el-menu-item:hover .el-icon) {
+  transform: scale(1.15);
 }
 
 /* 确保内容不会被遮挡 */
 :deep(.el-menu--collapse) {
   width: 64px;
+}
+
+/* 添加菜单项文字的过渡效果 */
+:deep(.el-menu-item span) {
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+}
+
+/* 添加折叠/展开的动画 */
+.el-menu--collapse :deep(.el-menu-item) {
+  padding: 0 20px !important;
 }
 </style> 

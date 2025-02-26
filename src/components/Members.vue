@@ -341,12 +341,22 @@ const handleSwitch = async (memberName: string) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  /* 添加过渡效果 */
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .header h2 {
   margin: 0;
   font-size: 24px;
   color: var(--el-text-color-primary);
+  /* 添加文字过渡效果 */
+  transition: transform 0.3s ease, color 0.3s ease;
+}
+
+/* 添加标题悬停效果 */
+.header h2:hover {
+  transform: translateX(5px);
+  color: var(--el-color-primary);
 }
 
 .header-right {
@@ -357,40 +367,167 @@ const handleSwitch = async (memberName: string) => {
 
 .search-input {
   width: 200px;
+  /* 添加搜索框过渡效果 */
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* 搜索框悬停效果 */
+.search-input:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.search-input:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  width: 220px; /* 聚焦时略微变宽 */
 }
 
 .loading-card {
   padding: 20px;
+  /* 添加加载卡片动画 */
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .members-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
+  /* 添加列表动画 */
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .member-card {
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
   cursor: pointer;
+  /* 添加卡片出现动画 */
+  animation: cardAppear 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform-origin: center;
+  will-change: transform, box-shadow;
+  position: relative;
+  overflow: hidden;
 }
 
+@keyframes cardAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 添加卡片悬停效果 */
 .member-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 添加卡片点击效果 */
+.member-card:active {
+  transform: translateY(-2px) scale(0.98);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 添加卡片波纹效果 */
+.member-card::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%);
+  transform-origin: 50% 50%;
+}
+
+.member-card:active::after {
+  animation: ripple 0.8s ease-out;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0, 0);
+    opacity: 0.5;
+  }
+  20% {
+    transform: scale(25, 25);
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(40, 40);
+  }
 }
 
 .member-card.is-current {
   border: 2px solid var(--el-color-primary);
   background-color: var(--el-color-primary-light-9);
+  /* 添加当前卡片动画 */
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(64, 158, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
+  }
 }
 
 .member-card.is-selected {
   border: 2px solid var(--el-color-danger);
   background-color: var(--el-color-danger-light-9);
+  /* 添加选中卡片动画 */
+  animation: selectedPulse 2s infinite;
+}
+
+@keyframes selectedPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(245, 108, 108, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0);
+  }
 }
 
 .member-card.is-selectable:hover {
   border: 2px solid var(--el-color-danger);
+  transform: translateY(-5px) scale(1.02);
 }
 
 .member-card.is-disabled {
@@ -408,6 +545,7 @@ const handleSwitch = async (memberName: string) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transition: all 0.3s ease;
 }
 
 .member-name {
@@ -417,10 +555,22 @@ const handleSwitch = async (memberName: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
+  transition: all 0.3s ease;
+}
+
+/* 添加名称悬停效果 */
+.member-card:hover .member-name {
+  color: var(--el-color-primary);
+  transform: translateX(5px);
 }
 
 .member-name .el-tag {
   margin-right: 8px;
+  transition: all 0.3s ease;
+}
+
+.member-card:hover .member-name .el-tag {
+  transform: scale(1.05);
 }
 
 .member-actions {
@@ -438,15 +588,112 @@ const handleSwitch = async (memberName: string) => {
 .is-active {
   background-color: var(--el-color-danger);
   border-color: var(--el-color-danger);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* 添加按钮悬停效果 */
+.el-button {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.el-button:not(.is-disabled):hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.el-button:not(.is-disabled):active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 添加按钮波纹效果 */
+.el-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%);
+  transform-origin: 50% 50%;
+}
+
+.el-button:active::after {
+  animation: ripple 0.8s ease-out;
 }
 
 .sort-controls {
   margin-right: 16px;
+  transition: all 0.3s ease;
+}
+
+.sort-controls:hover {
+  transform: translateY(-2px);
 }
 
 .sort-controls .el-button {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.sort-controls .el-button .el-icon {
+  transition: transform 0.3s ease;
+}
+
+.sort-controls .el-button:hover .el-icon {
+  transform: scale(1.2);
+}
+
+/* 添加对话框动画 */
+:deep(.el-dialog) {
+  transform: scale(0.9);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+:deep(.el-dialog.dialog-fade-enter-active) {
+  transform: scale(1);
+  opacity: 1;
+}
+
+:deep(.el-dialog.dialog-fade-leave-active) {
+  transform: scale(0.9);
+  opacity: 0;
+}
+
+/* 添加空状态动画 */
+:deep(.el-empty) {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* 添加骨架屏动画 */
+:deep(.el-skeleton) {
+  animation: skeletonPulse 1.5s infinite;
+}
+
+@keyframes skeletonPulse {
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.7;
+  }
+}
+
+/* 添加图标动画 */
+.el-icon {
+  transition: transform 0.3s ease;
+}
+
+.member-card:hover .el-icon {
+  transform: scale(1.2);
 }
 </style> 

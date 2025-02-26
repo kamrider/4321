@@ -408,7 +408,7 @@ const handlePaste = async (event: ClipboardEvent) => {
          @drop.prevent="handleFileDrop"
          :class="{ 'dragging': isDragging }">
       <div class="drop-zone-content" v-if="fileList.length === 0">
-        <span class="icon">📁</span>
+        <span class="icon animated-icon">📁</span>
         <p>拖拽文件到此处或点击选择文件</p>
       </div>
       
@@ -416,7 +416,11 @@ const handlePaste = async (event: ClipboardEvent) => {
         <div v-for="file in fileList" 
              :key="file.path" 
              class="preview-item"
-             :class="{ 'error': file.status === 'error' }"
+             :class="{ 
+               'error': file.status === 'error',
+               'uploading': file.status === 'uploading',
+               'completed': file.status === 'completed'
+             }"
              @click="handleViewDetail(file)">
           <el-image 
             :src="file.preview" 
@@ -446,28 +450,39 @@ const handlePaste = async (event: ClipboardEvent) => {
               <div class="progress" :style="{ width: `${file.progress}%` }"></div>
             </div>
             <span class="progress-text">{{ file.progress }}%</span>
+            <div class="upload-animation">
+              <div class="upload-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </div>
+          <div v-if="file.status === 'completed'" class="complete-animation">
+            <span class="check-mark">✓</span>
           </div>
         </div>
       </div>
     </div>
     
     <div class="controls">
-      <button @click="handleFileSelect">选择文件</button>
+      <button @click="handleFileSelect" class="btn btn-select">选择文件</button>
       <button 
         @click="startUpload" 
-        :disabled="isUploadDisabled">
+        :disabled="isUploadDisabled"
+        class="btn btn-upload">
         上传
       </button>
       <button 
         @click="cancelUpload"
         v-if="hasUploadingFiles"
-        class="cancel-btn">
+        class="btn btn-cancel">
         取消
       </button>
       <button 
         @click="clearAllFiles"
         v-if="fileList.length > 0"
-        class="clear-btn">
+        class="btn btn-clear">
         清空列表
       </button>
     </div>
@@ -549,31 +564,85 @@ const handlePaste = async (event: ClipboardEvent) => {
   margin-bottom: 20px;
 }
 
-.controls button {
-  padding: 8px 16px;
-  border-radius: 4px;
+.btn {
+  padding: 10px 20px;
+  border-radius: 6px;
   border: none;
-  background: #2c3e50;
-  color: white;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.controls button:hover:not(:disabled) {
-  background: #34495e;
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
-.controls button:disabled {
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn:disabled {
   background: #ccc;
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
-.controls .cancel-btn {
-  background: #e74c3c;
+.btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%);
+  transform-origin: 50% 50%;
 }
 
-.controls .cancel-btn:hover {
-  background: #c0392b;
+.btn:focus:not(:active)::after {
+  animation: ripple 1s ease-out;
+}
+
+.btn-select {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+}
+
+.btn-upload {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  color: white;
+}
+
+.btn-cancel {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+}
+
+.btn-clear {
+  background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+  color: white;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0, 0);
+    opacity: 0.5;
+  }
+  20% {
+    transform: scale(25, 25);
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(40, 40);
+  }
 }
 
 .progress-container {
@@ -593,7 +662,9 @@ const handlePaste = async (event: ClipboardEvent) => {
 
 .progress {
   height: 100%;
-  background: #4CAF50;
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  background-size: 200% 100%;
+  animation: progress-animation 2s linear infinite;
   transition: width 0.3s ease;
 }
 
@@ -667,6 +738,17 @@ const handlePaste = async (event: ClipboardEvent) => {
 
 .preview-item.error {
   border: 1px solid #ff4444;
+  animation: shake 0.5s ease-in-out;
+}
+
+.preview-item.uploading {
+  border: 1px solid #409EFF;
+  box-shadow: 0 0 8px rgba(64, 158, 255, 0.3);
+}
+
+.preview-item.completed {
+  border: 1px solid #67C23A;
+  animation: success-pulse 1s ease-in-out;
 }
 
 .preview-image {
@@ -726,20 +808,6 @@ const handlePaste = async (event: ClipboardEvent) => {
 
 .file-progress {
   margin-top: 8px;
-}
-
-.clear-btn {
-  background: #666;
-}
-
-.clear-btn:hover {
-  background: #555;
-}
-
-.file-date {
-  font-size: 12px;
-  color: #666;
-  margin: 4px 0;
 }
 
 .mistake-detail-dialog :deep(.el-dialog__body) {
@@ -810,5 +878,95 @@ const handlePaste = async (event: ClipboardEvent) => {
 .detail-status.idle {
   background-color: var(--el-color-info-light-9);
   color: var(--el-color-info);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+@keyframes success-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(103, 194, 58, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(103, 194, 58, 0); }
+}
+
+.animated-icon {
+  animation: bounce 2s infinite;
+  display: inline-block;
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-20px); }
+  60% { transform: translateY(-10px); }
+}
+
+.upload-animation {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.upload-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.upload-dots span {
+  width: 8px;
+  height: 8px;
+  background-color: #409EFF;
+  border-radius: 50%;
+  display: inline-block;
+  animation: dots-animation 1.4s infinite ease-in-out both;
+}
+
+.upload-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.upload-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes dots-animation {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+.complete-animation {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: fade-in-out 1.5s ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check-mark {
+  font-size: 60px;
+  color: #67C23A;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes fade-in-out {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes progress-animation {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
 }
 </style>

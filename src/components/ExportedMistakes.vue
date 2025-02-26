@@ -514,6 +514,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   border-radius: 8px;
   padding: 16px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.export-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
 }
 
 .export-header {
@@ -529,23 +535,63 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   gap: 8px;
 }
 
+/* 添加按钮动画效果 */
+.export-actions .el-button {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.export-actions .el-button:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 .date-info {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 16px;
   color: #333;
+  transition: all 0.3s ease;
+}
+
+.date-info:hover {
+  color: var(--el-color-primary);
+}
+
+.date-info .el-icon {
+  transition: transform 0.3s ease;
+}
+
+.date-info:hover .el-icon {
+  transform: scale(1.2) rotate(5deg);
 }
 
 .count {
   color: #666;
   font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.date-info:hover .count {
+  color: var(--el-color-primary-light-3);
 }
 
 .mistakes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .mistake-item {
@@ -553,7 +599,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   border-radius: 4px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   padding: 4px;
   border: 2px solid transparent;
   /* 添加左边框样式来区分不同类型 */
@@ -561,8 +607,14 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 }
 
 .mistake-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px) scale(1.03);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  z-index: 1;
+}
+
+.mistake-item:active {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .preview-image {
@@ -570,6 +622,11 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   height: 200px;
   object-fit: contain;
   background: #f5f7fa;
+  transition: all 0.3s ease;
+}
+
+.mistake-item:hover .preview-image {
+  filter: brightness(1.05);
 }
 
 .image-error {
@@ -591,6 +648,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
+  transition: all 0.3s ease;
+}
+
+.mistake-item:hover .answer-count {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.05);
 }
 
 .mistake-info {
@@ -602,10 +665,17 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
+  transition: all 0.3s ease;
+}
+
+.mistake-item:hover .mistake-info {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.05);
 }
 
 .proficiency {
   margin-bottom: 4px;
+  transition: color 0.3s ease;
 }
 
 .detail-container {
@@ -613,6 +683,18 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   flex-direction: column;
   align-items: center;
   gap: 20px;
+  animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .mistake-section,
@@ -621,12 +703,18 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  transition: all 0.5s ease;
 }
 
 .detail-image {
   max-height: 60vh;
   width: auto;
   object-fit: contain;
+  transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.detail-image:hover {
+  transform: scale(1.02);
 }
 
 .answer-item {
@@ -634,15 +722,41 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   width: 100%;
   display: flex;
   justify-content: center;
+  animation: slideInUp 0.5s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .training-control {
   margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .training-control .el-button {
   padding: 12px 24px;
   font-size: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.training-control .el-button:not(.is-disabled):hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.training-control .el-button:not(.is-disabled):active {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
 }
 
 .training-control .el-button + .el-button {
@@ -654,16 +768,43 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   color: #909399;
   font-size: 14px;
   text-align: center;
+  transition: all 0.3s ease;
 }
 
 .zero-proficiency {
   color: #f56c6c;
   font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .zero-proficiency-item {
   border: 2px solid #f56c6c !important;
   box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
+  animation: pulseBorder 2s infinite;
+}
+
+@keyframes pulseBorder {
+  0% {
+    box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(245, 108, 108, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
+  }
 }
 
 .zero-proficiency-item:hover {
@@ -680,6 +821,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   border-bottom-left-radius: 4px;
   font-size: 12px;
   z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.mistake-item:hover .warning-badge {
+  background-color: #f78989;
+  transform: scale(1.05);
 }
 
 .filter-bar {
@@ -690,6 +837,19 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: center;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.filter-bar:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+}
+
+.filter-bar .el-radio-button {
+  transition: all 0.3s ease;
+}
+
+.filter-bar .el-radio-button:not(.is-active):hover {
+  transform: translateY(-2px);
 }
 
 .selected-export {
@@ -710,6 +870,11 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   font-size: 12px;
   color: white;
   z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.mistake-item:hover .export-type-badge {
+  transform: scale(1.05);
 }
 
 .selected-badge {
@@ -724,6 +889,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 .training-tip.submitting {
   color: var(--el-color-primary);
   font-weight: 500;
+  animation: pulse 1.5s infinite;
 }
 
 .training-control .el-button.is-disabled {
@@ -787,6 +953,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: center;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.timer-container:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .timer-display {
@@ -799,11 +971,34 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   min-width: 180px;
   justify-content: center;
   background-color: white;
+  animation: timerPulse 2s infinite;
+}
+
+@keyframes timerPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(var(--el-color-primary-rgb), 0.1);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(var(--el-color-primary-rgb), 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(var(--el-color-primary-rgb), 0.1);
+  }
 }
 
 .timer-icon {
   margin-right: 8px;
   font-size: 24px;
+  animation: rotateIcon 10s linear infinite;
+}
+
+@keyframes rotateIcon {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .timer-text {
@@ -811,5 +1006,53 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   font-weight: bold;
   min-width: 120px;
   text-align: center;
+}
+
+/* 添加对话框动画 */
+.mistake-detail-dialog :deep(.el-dialog) {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform: scale(0.9);
+  opacity: 0;
+}
+
+.mistake-detail-dialog :deep(.el-dialog.dialog-fade-enter-active) {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.mistake-detail-dialog :deep(.el-dialog.dialog-fade-leave-active) {
+  transform: scale(0.9);
+  opacity: 0;
+}
+
+/* 添加按钮组动画 */
+.el-button-group .el-button {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.el-button-group .el-button:not(.is-disabled):hover {
+  transform: translateY(-2px);
+  z-index: 1;
+}
+
+/* 添加下拉菜单动画 */
+.el-dropdown-menu {
+  animation: dropdownFadeIn 0.3s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 添加骨架屏动画 */
+.el-skeleton {
+  transition: opacity 0.5s ease;
 }
 </style> 

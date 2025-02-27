@@ -38,7 +38,7 @@ export class MetadataManager {
     const now = new Date()
     const defaultTrainingInterval = 1
     const nextTrainingDate = new Date(now)
-    nextTrainingDate.setDate(now.getDate() + defaultTrainingInterval)
+    nextTrainingDate.setHours(0, 0, 0, 0)
 
     return {
       id: uuidv4(),

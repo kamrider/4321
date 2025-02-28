@@ -357,25 +357,21 @@ const batchExportSelectedItems = async () => {
   
   isExporting.value = true
   try {
-    // 获取所有选中项的ID
-    const itemIds = selectedItems.value
-      .filter(item => item.originalFileId)
-      .map(item => item.originalFileId as string)
+    // 只获取路径信息，避免复杂对象
+    const paths = selectedItems.value
+      .filter(item => item.path)
+      .map(item => item.path)
     
-    if (itemIds.length === 0) {
+    if (paths.length === 0) {
       ElMessage.warning('没有可导出的项目')
       return
     }
     
-    // 使用正确的方法调用
-    const result = await window.ipcRenderer.file.exportMistakesBatch({
-      ids: itemIds,
-      exportType: 'selected'
-    })
+    // 直接使用 invoke 方法
+    const result = await window.ipcRenderer.invoke('file:export', paths)
     
     if (result.success) {
-      ElMessage.success(`成功导出 ${itemIds.length} 个错题`)
-      // 可选：退出选择模式
+      ElMessage.success(`成功导出 ${paths.length} 个错题`)
       isSelectMode.value = false
       selectedItems.value = []
     } else {
@@ -383,7 +379,7 @@ const batchExportSelectedItems = async () => {
     }
   } catch (err) {
     console.error('批量导出失败:', err)
-    ElMessage.error('批量导出失败')
+    ElMessage.error(`批量导出失败: ${err}`)
   } finally {
     isExporting.value = false
   }

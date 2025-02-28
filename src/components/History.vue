@@ -552,37 +552,52 @@ const exportHistory = async () => {
   try {
     loading.value = true
     
-    // 如果在导出模式下，只导出选中的项目
+    // 在导出模式下，只导出选中的项目
     if (isExportMode.value && selectedExportItems.value.length > 0) {
-      for (const item of selectedExportItems.value) {
-        try {
+      try {
+        // 准备批量导出的数据
+        const mistakesToExport = []
+        
+        // 收集所有选中的错题及其答案
+        for (const item of selectedExportItems.value) {
           // 获取当前错题的完整信息
           const mistakeResult = await window.ipcRenderer.file.getMistakeDetails(item.fileId)
           if (!mistakeResult.success) {
             throw new Error('获取错题详情失败')
           }
-
-          // 调用导出函数
-          const exportResult = await window.ipcRenderer.file.exportMistake({
-            mistake: mistakeResult.data,
-            answer: mistakeResult.data.metadata?.pairedWith,
-            exportTime: new Date().toISOString(),
-            exportType: 'selected'
-          })
           
-          if (exportResult.success) {
-            // 设置冻结状态
-            await window.ipcRenderer.file.setFrozen(item.fileId, true)
+          // 添加到导出列表
+          mistakesToExport.push({
+            mistake: mistakeResult.data,
+            answer: mistakeResult.data.metadata?.pairedWith
+          })
+        }
+        
+        // 使用批量导出接口
+        const exportResult = await window.ipcRenderer.file.exportSelectedMistakes({
+          mistakes: mistakesToExport,
+          exportType: 'selected'
+        })
+        
+        if (exportResult.success) {
+          // 设置所有导出的错题为冻结状态
+          for (const result of exportResult.data.exportResults) {
+            await window.ipcRenderer.file.setFrozen(result.fileId, true)
+            
             // 更新本地状态
-            if (item.metadata) {
+            const item = selectedExportItems.value.find(item => item.fileId === result.fileId)
+            if (item && item.metadata) {
               item.metadata.isFrozen = true
             }
-            ElMessage.success(`错题已导出到: ${exportResult.data.exportPath}`)
           }
-        } catch (error) {
-          console.error('导出错题失败:', error)
-          ElMessage.warning('部分错题导出失败')
+          
+          ElMessage.success(`错题已导出到: ${exportResult.data.exportPath}`)
+        } else {
+          throw new Error(exportResult.error || '导出失败')
         }
+      } catch (error) {
+        console.error('导出错题失败:', error)
+        ElMessage.warning('部分错题导出失败')
       }
       
       // 导出完成后退出导出模式

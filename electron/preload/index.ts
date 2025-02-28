@@ -116,9 +116,18 @@ interface UploadAPI {
 // 在已有的接口定义后添加新的接口
 export interface ExportMistakeParams {
   mistake: MistakeItem
-  answer: MistakeItem | null
+  answer: MistakeItem | MistakeItem[] | null
   exportTime: string
   exportType: 'selected' | 'training'
+}
+
+// 添加批量导出错题的接口定义
+export interface ExportSelectedMistakesParams {
+  mistakes: Array<{
+    mistake: MistakeItem
+    answer: MistakeItem | MistakeItem[] | null
+  }>
+  exportType: 'selected'
 }
 
 interface ExportMistakeResult {
@@ -126,6 +135,20 @@ interface ExportMistakeResult {
   error?: string
   data?: {
     exportPath: string
+    exportInfo?: any
+  }
+}
+
+// 批量导出结果接口
+interface ExportSelectedMistakesResult {
+  success: boolean
+  error?: string
+  data?: {
+    exportPath: string
+    exportResults?: Array<{
+      fileId: string
+      exportInfo: any
+    }>
   }
 }
 
@@ -188,7 +211,8 @@ export interface IpcRenderer {
       error?: string
     }>
     exportMistake: (params: ExportMistakeParams) => Promise<ExportMistakeResult>
-    getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem[]>>
+    exportSelectedMistakes: (params: ExportSelectedMistakesParams) => Promise<ExportSelectedMistakesResult>
+    getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem>>
     getExportedMistakes: () => Promise<Result<MistakeItem[]>>
     deleteExportedMistakes: (date: string) => Promise<{
       success: boolean
@@ -355,6 +379,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
     exportMistake: (params: ExportMistakeParams) => 
       ipcRenderer.invoke('file:export-mistake', params),
+    exportSelectedMistakes: (params: ExportSelectedMistakesParams) => 
+      ipcRenderer.invoke('file:export-selected-mistakes', params),
     getMistakeDetails: (fileId: string) => ipcRenderer.invoke('file:get-mistake-details', fileId),
     getExportedMistakes: () => ipcRenderer.invoke('file:get-exported-mistakes'),
     deleteExportedMistakes: (date: string) => ipcRenderer.invoke('file:delete-exported-mistakes', date),
@@ -513,7 +539,8 @@ declare global {
           error?: string
         }>
         exportMistake: (params: ExportMistakeParams) => Promise<ExportMistakeResult>
-        getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem[]>>
+        exportSelectedMistakes: (params: ExportSelectedMistakesParams) => Promise<ExportSelectedMistakesResult>
+        getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem>>
         getExportedMistakes: () => Promise<Result<MistakeItem[]>>
         deleteExportedMistakes: (date: string) => Promise<{
           success: boolean

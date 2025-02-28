@@ -1500,6 +1500,26 @@ ipcMain.handle('file:export-mistake', async (_, params: {
   exportType: 'selected' | 'training'
 }) => {
   try {
+    // 调用单个错题导出函数
+    return await exportSingleMistake(params);
+  } catch (error) {
+    console.error('导出错题失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
+// 添加批量导出选中错题的处理函数
+ipcMain.handle('file:export-selected-mistakes', async (_, params: {
+  mistakes: Array<{
+    mistake: MistakeItem
+    answer: MistakeItem | MistakeItem[] | null
+  }>
+  exportType: 'selected'
+}) => {
+  try {
     const exportBaseDir = getExportBaseDir()
     
     // 获取当前日期和时间
@@ -1534,66 +1554,23 @@ ipcMain.handle('file:export-mistake', async (_, params: {
     
     // 获取当前目录下已存在的错题数量，用于生成新的序号
     const existingMistakes = fs.readdirSync(mistakesDir)
-    const mistakeNumber = existingMistakes.length + 1
+    let mistakeNumber = existingMistakes.length + 1
+    
+    // 导出结果信息
+    const exportResults = []
+    
+    // 批量处理每个错题
+    for (const item of params.mistakes) {
+      try {
+        // 生成错题文件名：序号 + 原始扩展名
+        const mistakeExt = path.extname(item.mistake.path)
+        const mistakeFileName = `错题${mistakeNumber}${mistakeExt}`
+        const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
+        await fs.promises.copyFile(item.mistake.path, mistakeTargetPath)
 
-    // 生成错题文件名：序号 + 原始扩展名
-    const mistakeExt = path.extname(params.mistake.path)
-    const mistakeFileName = `错题${mistakeNumber}${mistakeExt}`
-    const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
-    await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
-
-    // 生成错题预览图
-    const mistakePreviewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
-    await sharp(params.mistake.path)
-      .resize(800, 800, {
-        fit: 'inside',
-        withoutEnlargement: false
-      })
-      .webp({ 
-        quality: 85,
-        effort: 4
-      })
-      .toFile(mistakePreviewPath)
-
-    // 保存错题的元数据
-    const mistakeMetadata = {
-      originalFileId: params.mistake.fileId,
-      exportDate: today.toISOString(),
-      exportType: params.exportType,
-      metadata: params.mistake.metadata,
-      previewPath: path.relative(exportDir, mistakePreviewPath)
-    }
-    await fs.promises.writeFile(
-      path.join(metadataDir, `错题${mistakeNumber}.json`),
-      JSON.stringify(mistakeMetadata, null, 2)
-    )
-
-    // 准备返回的路径信息
-    const exportInfo = {
-      mistake: {
-        path: mistakeTargetPath,
-        preview: mistakePreviewPath,
-        metadata: params.mistake.metadata
-      },
-      answer: null as any
-    }
-
-    // 如果有答案，使用对应的命名方式
-    if (params.answer) {
-      const answers = Array.isArray(params.answer) ? params.answer : [params.answer]
-      const answerPaths = []
-      
-      for (let i = 0; i < answers.length; i++) {
-        const answer = answers[i]
-        const answerExt = path.extname(answer.path)
-        // 生成答案文件名：错题序号.答案序号 + 原始扩展名
-        const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`
-        const answerTargetPath = path.join(answersDir, answerFileName)
-        await fs.promises.copyFile(answer.path, answerTargetPath)
-
-        // 生成答案预览图
-        const answerPreviewPath = path.join(previewsDir, `答案${mistakeNumber}.${i + 1}.webp`)
-        await sharp(answer.path)
+        // 生成错题预览图
+        const mistakePreviewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+        await sharp(item.mistake.path)
           .resize(800, 800, {
             fit: 'inside',
             withoutEnlargement: false
@@ -1602,47 +1579,252 @@ ipcMain.handle('file:export-mistake', async (_, params: {
             quality: 85,
             effort: 4
           })
-          .toFile(answerPreviewPath)
+          .toFile(mistakePreviewPath)
 
-        // 保存答案的元数据
-        const answerMetadata = {
-          originalFileId: answer.fileId,
+        // 保存错题的元数据
+        const mistakeMetadata = {
+          originalFileId: item.mistake.fileId,
           exportDate: today.toISOString(),
           exportType: params.exportType,
-          metadata: answer.metadata,
-          previewPath: path.relative(exportDir, answerPreviewPath)
+          metadata: item.mistake.metadata,
+          previewPath: path.relative(exportDir, mistakePreviewPath)
         }
         await fs.promises.writeFile(
-          path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
-          JSON.stringify(answerMetadata, null, 2)
+          path.join(metadataDir, `错题${mistakeNumber}.json`),
+          JSON.stringify(mistakeMetadata, null, 2)
         )
 
-        answerPaths.push({
-          path: answerTargetPath,
-          preview: answerPreviewPath,
-          metadata: answer.metadata
-        })
-      }
+        // 准备返回的路径信息
+        const exportInfo = {
+          mistake: {
+            path: mistakeTargetPath,
+            preview: mistakePreviewPath,
+            metadata: item.mistake.metadata
+          },
+          answer: null as any
+        }
 
-      // 如果只有一个答案，直接赋值；如果有多个，返回数组
-      exportInfo.answer = answerPaths.length === 1 ? answerPaths[0] : answerPaths
+        // 如果有答案，使用对应的命名方式
+        if (item.answer) {
+          const answers = Array.isArray(item.answer) ? item.answer : [item.answer]
+          const answerPaths = []
+          
+          for (let i = 0; i < answers.length; i++) {
+            const answer = answers[i]
+            const answerExt = path.extname(answer.path)
+            // 生成答案文件名：错题序号.答案序号 + 原始扩展名
+            const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`
+            const answerTargetPath = path.join(answersDir, answerFileName)
+            await fs.promises.copyFile(answer.path, answerTargetPath)
+
+            // 生成答案预览图
+            const answerPreviewPath = path.join(previewsDir, `答案${mistakeNumber}.${i + 1}.webp`)
+            await sharp(answer.path)
+              .resize(800, 800, {
+                fit: 'inside',
+                withoutEnlargement: false
+              })
+              .webp({ 
+                quality: 85,
+                effort: 4
+              })
+              .toFile(answerPreviewPath)
+
+            // 保存答案的元数据
+            const answerMetadata = {
+              originalFileId: answer.fileId,
+              exportDate: today.toISOString(),
+              exportType: params.exportType,
+              metadata: answer.metadata,
+              previewPath: path.relative(exportDir, answerPreviewPath)
+            }
+            await fs.promises.writeFile(
+              path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
+              JSON.stringify(answerMetadata, null, 2)
+            )
+
+            answerPaths.push({
+              path: answerTargetPath,
+              preview: answerPreviewPath,
+              metadata: answer.metadata
+            })
+          }
+
+          // 如果只有一个答案，直接赋值；如果有多个，返回数组
+          exportInfo.answer = answerPaths.length === 1 ? answerPaths[0] : answerPaths
+        }
+        
+        exportResults.push({
+          fileId: item.mistake.fileId,
+          exportInfo
+        })
+        
+        mistakeNumber++
+      } catch (error) {
+        console.error(`导出错题 ${item.mistake.fileId} 失败:`, error)
+        // 继续处理下一个错题
+      }
     }
 
     return {
       success: true,
       data: {
         exportPath: exportDir,
-        exportInfo
+        exportResults
       }
     }
   } catch (error) {
-    console.error('导出错题失败:', error)
+    console.error('批量导出错题失败:', error)
     return {
       success: false,
       error: error.message
     }
   }
 })
+
+// 提取单个错题导出的函数
+async function exportSingleMistake(params: {
+  mistake: MistakeItem
+  answer: MistakeItem | MistakeItem[] | null
+  exportTime: string
+  exportType: 'selected' | 'training'
+}) {
+  const exportBaseDir = getExportBaseDir()
+  
+  // 获取当前日期和时间
+  const today = new Date()
+  const currentHour = today.getHours()
+  
+  // 如果当前时间是下午6点之后，使用明天的日期
+  let exportDate = new Date(today)
+  if (currentHour >= 18) {
+    exportDate.setDate(exportDate.getDate() + 1)
+  }
+  
+  // 格式化日期字符串
+  const dateStr = exportDate.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).replace(/\//g, '-')
+  
+  const exportDir = path.join(exportBaseDir, dateStr)
+  fs.mkdirSync(exportDir, { recursive: true })
+  
+  const mistakesDir = path.join(exportDir, '错题')
+  const answersDir = path.join(exportDir, '答案')
+  const metadataDir = path.join(exportDir, 'metadata')
+  const previewsDir = path.join(exportDir, 'previews')
+  
+  fs.mkdirSync(mistakesDir, { recursive: true })
+  fs.mkdirSync(answersDir, { recursive: true })
+  fs.mkdirSync(metadataDir, { recursive: true })
+  fs.mkdirSync(previewsDir, { recursive: true })
+  
+  // 获取当前目录下已存在的错题数量，用于生成新的序号
+  const existingMistakes = fs.readdirSync(mistakesDir)
+  const mistakeNumber = existingMistakes.length + 1
+
+  // 生成错题文件名：序号 + 原始扩展名
+  const mistakeExt = path.extname(params.mistake.path)
+  const mistakeFileName = `错题${mistakeNumber}${mistakeExt}`
+  const mistakeTargetPath = path.join(mistakesDir, mistakeFileName)
+  await fs.promises.copyFile(params.mistake.path, mistakeTargetPath)
+
+  // 生成错题预览图
+  const mistakePreviewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+  await sharp(params.mistake.path)
+    .resize(800, 800, {
+      fit: 'inside',
+      withoutEnlargement: false
+    })
+    .webp({ 
+      quality: 85,
+      effort: 4
+    })
+    .toFile(mistakePreviewPath)
+
+  // 保存错题的元数据
+  const mistakeMetadata = {
+    originalFileId: params.mistake.fileId,
+    exportDate: today.toISOString(),
+    exportType: params.exportType,
+    metadata: params.mistake.metadata,
+    previewPath: path.relative(exportDir, mistakePreviewPath)
+  }
+  await fs.promises.writeFile(
+    path.join(metadataDir, `错题${mistakeNumber}.json`),
+    JSON.stringify(mistakeMetadata, null, 2)
+  )
+
+  // 准备返回的路径信息
+  const exportInfo = {
+    mistake: {
+      path: mistakeTargetPath,
+      preview: mistakePreviewPath,
+      metadata: params.mistake.metadata
+    },
+    answer: null as any
+  }
+
+  // 如果有答案，使用对应的命名方式
+  if (params.answer) {
+    const answers = Array.isArray(params.answer) ? params.answer : [params.answer]
+    const answerPaths = []
+    
+    for (let i = 0; i < answers.length; i++) {
+      const answer = answers[i]
+      const answerExt = path.extname(answer.path)
+      // 生成答案文件名：错题序号.答案序号 + 原始扩展名
+      const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`
+      const answerTargetPath = path.join(answersDir, answerFileName)
+      await fs.promises.copyFile(answer.path, answerTargetPath)
+
+      // 生成答案预览图
+      const answerPreviewPath = path.join(previewsDir, `答案${mistakeNumber}.${i + 1}.webp`)
+      await sharp(answer.path)
+        .resize(800, 800, {
+          fit: 'inside',
+          withoutEnlargement: false
+        })
+        .webp({ 
+          quality: 85,
+          effort: 4
+        })
+        .toFile(answerPreviewPath)
+
+      // 保存答案的元数据
+      const answerMetadata = {
+        originalFileId: answer.fileId,
+        exportDate: today.toISOString(),
+        exportType: params.exportType,
+        metadata: answer.metadata,
+        previewPath: path.relative(exportDir, answerPreviewPath)
+      }
+      await fs.promises.writeFile(
+        path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
+        JSON.stringify(answerMetadata, null, 2)
+      )
+
+      answerPaths.push({
+        path: answerTargetPath,
+        preview: answerPreviewPath,
+        metadata: answer.metadata
+      })
+    }
+
+    // 如果只有一个答案，直接赋值；如果有多个，返回数组
+    exportInfo.answer = answerPaths.length === 1 ? answerPaths[0] : answerPaths
+  }
+
+  return {
+    success: true,
+    data: {
+      exportPath: exportDir,
+      exportInfo
+    }
+  }
+}
 
 // 添加获取错题详情的处理函数
 ipcMain.handle('file:get-mistake-details', async (_, fileId: string) => {

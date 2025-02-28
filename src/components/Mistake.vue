@@ -767,7 +767,12 @@ defineComponent({
   right: 8px;
   z-index: 1;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: all 0.3s ease;
+}
+
+.delete-btn:hover {
+  transform: rotate(90deg);
+  background-color: var(--el-color-danger-dark-2) !important;
 }
 
 .preview-item:hover .delete-btn {
@@ -800,10 +805,63 @@ defineComponent({
   display: flex;
   align-items: center;
   gap: 4px;
+  transition: all 0.3s ease;
+}
+
+.sort-controls .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sort-controls .el-icon {
   margin-left: 4px;
+}
+
+/* 为所有按钮添加悬停动画 */
+:deep(.el-button) {
+  transition: all 0.3s ease;
+}
+
+:deep(.el-button:not(.is-disabled):hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.el-button.is-text:hover) {
+  transform: translateY(-1px);
+  box-shadow: none;
+  background-color: var(--el-fill-color-light);
+}
+
+:deep(.el-button.is-link:hover) {
+  transform: translateY(-1px);
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+/* 特殊按钮样式 */
+.header-actions :deep(.el-button) {
+  transition: all 0.3s ease;
+}
+
+.header-actions :deep(.el-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.answer-control :deep(.el-button) {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.answer-control :deep(.el-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.answer-control :deep(.el-button:active) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .context-menu {

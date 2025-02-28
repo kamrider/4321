@@ -172,6 +172,37 @@ interface ExportToWordResult {
   error?: string
 }
 
+// 添加批量导出错题的接口定义
+export interface ExportMistakesBatchParams {
+  mistakes: Array<{
+    mistake: MistakeItem
+    answer: MistakeItem | MistakeItem[] | null
+    exportType?: 'selected' | 'training'
+    updateMetadata?: boolean
+  }>
+  targetFolder?: string
+  exportFormat?: string
+}
+
+interface ExportMistakesBatchResult {
+  success: boolean
+  error?: string
+  data?: {
+    exportPath: string
+    results: Array<{
+      id: string
+      success: boolean
+      error?: string
+      exportInfo?: any
+    }>
+    stats: {
+      total: number
+      success: number
+      failed: number
+    }
+  }
+}
+
 export interface IpcRenderer {
   // 基础 IPC 方法
   on(channel: string, func: (...args: any[]) => void): void
@@ -233,6 +264,7 @@ export interface IpcRenderer {
       error?: string
     }>
     exportDateToWord: (date: string, type: string) => Promise<Result>
+    exportMistakesBatch: (params: ExportMistakesBatchParams) => Promise<ExportMistakesBatchResult>
   }
 }
 
@@ -394,6 +426,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       ipcRenderer.invoke('setMultipleFrozen', fileIds, isFrozen),
     exportDateToWord: (date: string, type: string) => 
       ipcRenderer.invoke('file:export-date-to-word', date, type),
+    exportMistakesBatch: (params: ExportMistakesBatchParams) => 
+      ipcRenderer.invoke('file:export-mistakes-batch', params),
   }
 })
 
@@ -561,6 +595,7 @@ declare global {
           error?: string
         }>
         exportDateToWord: (date: string, type: string) => Promise<Result>
+        exportMistakesBatch: (params: ExportMistakesBatchParams) => Promise<ExportMistakesBatchResult>
       }
     }
   }

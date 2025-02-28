@@ -2498,3 +2498,214 @@ ipcMain.handle('metadata:set-next-training-date', async (_, fileId: string, next
     }
   }
 })
+
+// 添加批量导出错题的处理函数
+ipcMain.handle('file:export-mistakes-batch', async (_, options) => {
+  try {
+    const {
+      mistakes,        // 错题数组
+      targetFolder,    // 目标文件夹名称（可选）
+      exportFormat     // 导出格式
+    } = options;
+    
+    // 验证参数
+    if (!Array.isArray(mistakes) || mistakes.length === 0) {
+      return { success: false, error: '没有提供要导出的错题' };
+    }
+    
+    const exportBaseDir = getExportBaseDir();
+    
+    // 创建目标文件夹（如果提供）
+    let exportDir = exportBaseDir;
+    if (targetFolder) {
+      exportDir = path.join(exportBaseDir, targetFolder);
+      if (!fs.existsSync(exportDir)) {
+        fs.mkdirSync(exportDir, { recursive: true });
+      }
+    } else {
+      // 使用默认的导出路径（与单个导出相同）
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).replace(/\//g, '-');
+      
+      exportDir = path.join(exportBaseDir, dateStr);
+      if (!fs.existsSync(exportDir)) {
+        fs.mkdirSync(exportDir, { recursive: true });
+      }
+    }
+    
+    // 创建子目录
+    const mistakesDir = path.join(exportDir, '错题');
+    const answersDir = path.join(exportDir, '答案');
+    const metadataDir = path.join(exportDir, 'metadata');
+    const previewsDir = path.join(exportDir, 'previews');
+    
+    fs.mkdirSync(mistakesDir, { recursive: true });
+    fs.mkdirSync(answersDir, { recursive: true });
+    fs.mkdirSync(metadataDir, { recursive: true });
+    fs.mkdirSync(previewsDir, { recursive: true });
+    
+    // 获取当前目录下已存在的错题数量，用于生成新的序号
+    const existingMistakes = fs.readdirSync(mistakesDir);
+    let mistakeNumber = existingMistakes.length + 1;
+    
+    // 处理每个错题
+    const results = [];
+    for (const mistakeData of mistakes) {
+      try {
+        const { mistake, answer, exportType = 'selected' } = mistakeData;
+        
+        // 生成错题文件名：序号 + 原始扩展名
+        const mistakeExt = path.extname(mistake.path);
+        const mistakeFileName = `错题${mistakeNumber}${mistakeExt}`;
+        const mistakeTargetPath = path.join(mistakesDir, mistakeFileName);
+        await fs.promises.copyFile(mistake.path, mistakeTargetPath);
+
+        // 生成错题预览图
+        const mistakePreviewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`);
+        await sharp(mistake.path)
+          .resize(800, 800, {
+            fit: 'inside',
+            withoutEnlargement: false
+          })
+          .webp({ 
+            quality: 85,
+            effort: 4
+          })
+          .toFile(mistakePreviewPath);
+
+        // 保存错题的元数据
+        const mistakeMetadata = {
+          originalFileId: mistake.fileId,
+          exportDate: new Date().toISOString(),
+          exportType: exportType,
+          metadata: mistake.metadata,
+          previewPath: path.relative(exportDir, mistakePreviewPath),
+          isReExported: true,
+          lastReExportDate: new Date().toISOString()
+        };
+        
+        await fs.promises.writeFile(
+          path.join(metadataDir, `错题${mistakeNumber}.json`),
+          JSON.stringify(mistakeMetadata, null, 2)
+        );
+
+        // 准备返回的路径信息
+        const exportInfo = {
+          mistake: {
+            path: mistakeTargetPath,
+            preview: mistakePreviewPath,
+            metadata: mistake.metadata
+          },
+          answer: null
+        };
+
+        // 如果有答案，使用对应的命名方式
+        if (answer) {
+          const answers = Array.isArray(answer) ? answer : [answer];
+          const answerPaths = [];
+          
+          for (let i = 0; i < answers.length; i++) {
+            const answerItem = answers[i];
+            const answerExt = path.extname(answerItem.path);
+            // 生成答案文件名：错题序号.答案序号 + 原始扩展名
+            const answerFileName = `${mistakeNumber}.${i + 1}${answerExt}`;
+            const answerTargetPath = path.join(answersDir, answerFileName);
+            await fs.promises.copyFile(answerItem.path, answerTargetPath);
+
+            // 生成答案预览图
+            const answerPreviewPath = path.join(previewsDir, `答案${mistakeNumber}.${i + 1}.webp`);
+            await sharp(answerItem.path)
+              .resize(800, 800, {
+                fit: 'inside',
+                withoutEnlargement: false
+              })
+              .webp({ 
+                quality: 85,
+                effort: 4
+              })
+              .toFile(answerPreviewPath);
+
+            // 保存答案的元数据
+            const answerMetadata = {
+              originalFileId: answerItem.fileId,
+              exportDate: new Date().toISOString(),
+              exportType: exportType,
+              metadata: answerItem.metadata,
+              previewPath: path.relative(exportDir, answerPreviewPath)
+            };
+            
+            await fs.promises.writeFile(
+              path.join(metadataDir, `答案${mistakeNumber}.${i + 1}.json`),
+              JSON.stringify(answerMetadata, null, 2)
+            );
+
+            answerPaths.push({
+              path: answerTargetPath,
+              preview: answerPreviewPath,
+              metadata: answerItem.metadata
+            });
+          }
+
+          // 如果只有一个答案，直接赋值；如果有多个，返回数组
+          exportInfo.answer = answerPaths.length === 1 ? answerPaths[0] : answerPaths;
+        }
+        
+        // 如果需要，更新元数据
+        if (mistakeData.updateMetadata) {
+          try {
+            const metadata = await metadataManager.getMetadata();
+            const fileMetadata = metadata.files[mistake.fileId];
+            
+            if (fileMetadata) {
+              fileMetadata.isReExported = true;
+              fileMetadata.lastReExportDate = new Date().toISOString();
+              await metadataManager.saveMetadata();
+            }
+          } catch (metadataError) {
+            console.error('更新错题元数据失败:', metadataError);
+            // 继续处理，不中断导出流程
+          }
+        }
+        
+        results.push({
+          id: mistake.fileId,
+          success: true,
+          exportInfo
+        });
+        
+        mistakeNumber++;
+      } catch (error) {
+        console.error(`导出错题失败:`, error);
+        results.push({
+          id: mistakeData.mistake.fileId,
+          success: false,
+          error: error.message || '导出失败'
+        });
+      }
+    }
+    
+    // 统计结果
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.length - successCount;
+    
+    return {
+      success: true,
+      data: {
+        exportPath: exportDir,
+        results,
+        stats: {
+          total: results.length,
+          success: successCount,
+          failed: failCount
+        }
+      }
+    };
+  } catch (error) {
+    console.error('批量导出错题失败:', error);
+    return { success: false, error: error.message || '批量导出错题失败' };
+  }
+});

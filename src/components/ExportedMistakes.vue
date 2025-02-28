@@ -7,7 +7,7 @@ defineComponent({
 
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Delete, Check, Close, Printer, ArrowDown } from '@element-plus/icons-vue'
+import { Document, Delete, Check, Close, Printer, ArrowDown, Select, Download } from '@element-plus/icons-vue'
 
 interface ExportedMistake {
   path: string
@@ -135,6 +135,11 @@ const formattedTime = computed(() => {
 
 // 添加导出状态
 const exportingDates = ref<Record<string, boolean>>({})
+
+// 添加选择相关的状态
+const isSelectMode = ref(false)
+const selectedItems = ref<ExportedMistake[]>([])
+const isExporting = ref(false)
 
 onMounted(async () => {
   try {
@@ -299,11 +304,98 @@ const handleTrainingResult = async (remembered: boolean) => {
   }
 }
 
+// 添加选择相关的方法
+const toggleSelectMode = () => {
+  isSelectMode.value = !isSelectMode.value
+  if (!isSelectMode.value) {
+    selectedItems.value = []
+  }
+}
+
+const toggleSelectItem = (mistake: ExportedMistake, event: Event) => {
+  if (!isSelectMode.value) return
+  
+  event.stopPropagation()
+  
+  const index = selectedItems.value.findIndex(item => 
+    item.path === mistake.path && item.preview === mistake.preview
+  )
+  
+  if (index === -1) {
+    selectedItems.value.push(mistake)
+  } else {
+    selectedItems.value.splice(index, 1)
+  }
+}
+
+const isItemSelected = (mistake: ExportedMistake) => {
+  return selectedItems.value.some(item => 
+    item.path === mistake.path && item.preview === mistake.preview
+  )
+}
+
+const selectAllItems = () => {
+  if (!isSelectMode.value) return
+  
+  const allItems: ExportedMistake[] = []
+  filteredExportedList.value.forEach(dateItem => {
+    dateItem.mistakes.forEach(mistake => {
+      allItems.push(mistake)
+    })
+  })
+  
+  selectedItems.value = allItems
+}
+
+const unselectAllItems = () => {
+  selectedItems.value = []
+}
+
+// 批量导出选中的错题
+const batchExportSelectedItems = async () => {
+  if (selectedItems.value.length === 0 || isExporting.value) return
+  
+  isExporting.value = true
+  try {
+    // 获取所有选中项的ID
+    const itemIds = selectedItems.value
+      .filter(item => item.originalFileId)
+      .map(item => item.originalFileId as string)
+    
+    if (itemIds.length === 0) {
+      ElMessage.warning('没有可导出的项目')
+      return
+    }
+    
+    // 使用正确的方法调用
+    const result = await window.ipcRenderer.file.exportMistakesBatch({
+      ids: itemIds,
+      exportType: 'selected'
+    })
+    
+    if (result.success) {
+      ElMessage.success(`成功导出 ${itemIds.length} 个错题`)
+      // 可选：退出选择模式
+      isSelectMode.value = false
+      selectedItems.value = []
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (err) {
+    console.error('批量导出失败:', err)
+    ElMessage.error('批量导出失败')
+  } finally {
+    isExporting.value = false
+  }
+}
+
+// 修改getItemClass方法，添加选中状态的样式
 const getItemClass = (mistake: ExportedMistake) => {
   return {
     'mistake-item': true,
     'selected-export': mistake.exportType === 'selected',
-    'training-export': mistake.exportType === 'training'
+    'training-export': mistake.exportType === 'training',
+    'item-selected': isSelectMode.value && isItemSelected(mistake)
   }
 }
 
@@ -333,6 +425,34 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   <div class="exported-container">
     <!-- 添加过滤控制栏 -->
     <div class="filter-bar">
+      <!-- 添加选择模式控制按钮 -->
+      <div class="selection-controls">
+        <el-button 
+          :type="isSelectMode ? 'primary' : 'default'" 
+          @click="toggleSelectMode"
+        >
+          <el-icon><Select /></el-icon>
+          {{ isSelectMode ? '退出选择' : '选择模式' }}
+        </el-button>
+        
+        <!-- 添加全选/取消全选按钮，仅在选择模式下显示 -->
+        <template v-if="isSelectMode">
+          <el-button @click="selectAllItems">全选</el-button>
+          <el-button @click="unselectAllItems">取消全选</el-button>
+          
+          <!-- 添加批量导出按钮 -->
+          <el-button 
+            type="primary" 
+            :disabled="selectedItems.length === 0"
+            :loading="isExporting"
+            @click="batchExportSelectedItems"
+          >
+            <el-icon><Download /></el-icon>
+            批量导出 ({{ selectedItems.length }})
+          </el-button>
+        </template>
+      </div>
+      
       <el-radio-group v-model="filterType" size="large">
         <el-radio-button label="all">全部记录</el-radio-button>
         <el-radio-button label="selected">选择导出</el-radio-button>
@@ -378,7 +498,14 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
               <div v-for="mistake in item.mistakes"
                    :key="mistake.path"
                    :class="getItemClass(mistake)"
-                   @click="handleViewDetail(mistake)">
+                   @click="isSelectMode ? toggleSelectItem(mistake, $event) : handleViewDetail(mistake)">
+                <!-- 添加选择指示器 -->
+                <el-checkbox 
+                  v-if="isSelectMode"
+                  :modelValue="isItemSelected(mistake)"
+                  @click.stop="toggleSelectItem(mistake, $event)"
+                  class="select-indicator"
+                />
                 <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
                   需加强
                 </div>
@@ -1041,5 +1168,24 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 /* 添加骨架屏动画 */
 .el-skeleton {
   transition: opacity 0.5s ease;
+}
+
+/* 添加选择模式相关样式 */
+.selection-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.item-selected {
+  border: 2px solid #409eff !important;
+  box-shadow: 0 0 8px rgba(64, 158, 255, 0.3);
+}
+
+.select-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
 }
 </style> 

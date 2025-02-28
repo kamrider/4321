@@ -345,54 +345,56 @@ defineComponent({
     <el-skeleton :loading="loading" animated :count="4" v-else>
       <template #default>
         <div class="preview-area">
-          <div v-for="item in sortedMistakeList" 
-               :key="item.fileId" 
-               class="preview-item"
-               :class="{
-                 'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
-                 'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
-                 'is-paired': item.metadata?.isPaired
-               }"
-               @click="item.metadata?.isPaired ? handleViewDetail(item) : null"
-               @contextmenu="(e) => handleContextMenu(e, item)">
-            <el-button
-              class="delete-btn"
-              type="danger"
-              circle
-              size="small"
-              @click.stop="handleDelete(item)"
-            >
-              <el-icon><Delete /></el-icon>
-            </el-button>
-            <el-image 
-              :src="item.preview" 
-              :preview-src-list="[]"
-              fit="contain"
-              class="preview-image"
-              @click.stop="handleViewDetail(item)"
-            />
-            <div class="file-info">
-              <p class="file-name">{{ item.originalFileName }}</p>
-              <div class="metadata-info">
-                <p class="join-days">
-                  {{ formatJoinDays(item.uploadDate) }}
-                </p>
-                <p class="metadata-item">
-                  <span class="label">熟练度:</span> 
-                  <el-progress :percentage="item.metadata.proficiency" />
-                </p>
-                <p class="metadata-item">
-                  <span class="label">训练状态:</span> 
-                  <span 
-                    class="training-status" 
-                    :class="formatTrainingStatus(item.metadata.nextTrainingDate).status"
-                  >
-                    {{ formatTrainingStatus(item.metadata.nextTrainingDate).text }}
-                  </span>
-                </p>
+          <transition-group name="mistake-list">
+            <div v-for="item in sortedMistakeList" 
+                :key="item.fileId" 
+                class="preview-item"
+                :class="{
+                  'is-mistake': item.metadata?.type === 'mistake' && !item.metadata?.isPaired,
+                  'is-answer': item.metadata?.type === 'answer' && !item.metadata?.isPaired,
+                  'is-paired': item.metadata?.isPaired
+                }"
+                @click="item.metadata?.isPaired ? handleViewDetail(item) : null"
+                @contextmenu="(e) => handleContextMenu(e, item)">
+              <el-button
+                class="delete-btn"
+                type="danger"
+                circle
+                size="small"
+                @click.stop="handleDelete(item)"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+              <el-image 
+                :src="item.preview" 
+                :preview-src-list="[]"
+                fit="contain"
+                class="preview-image"
+                @click.stop="handleViewDetail(item)"
+              />
+              <div class="file-info">
+                <p class="file-name">{{ item.originalFileName }}</p>
+                <div class="metadata-info">
+                  <p class="join-days">
+                    {{ formatJoinDays(item.uploadDate) }}
+                  </p>
+                  <p class="metadata-item">
+                    <span class="label">熟练度:</span> 
+                    <el-progress :percentage="item.metadata.proficiency" />
+                  </p>
+                  <p class="metadata-item">
+                    <span class="label">训练状态:</span> 
+                    <span 
+                      class="training-status" 
+                      :class="formatTrainingStatus(item.metadata.nextTrainingDate).status"
+                    >
+                      {{ formatTrainingStatus(item.metadata.nextTrainingDate).text }}
+                    </span>
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </transition-group>
         </div>
       </template>
     </el-skeleton>
@@ -426,52 +428,56 @@ defineComponent({
         </el-button>
       </div>
       
-      <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
-        <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
-        <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
-          <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
-               :key="answer.fileId"
-               class="answer-item"
-          >
+      <transition name="fade">
+        <div class="answer-section" v-if="showAnswer && activeItem.metadata?.pairedWith">
+          <!-- 如果 pairedWith 是数组，遍历显示所有答案 -->
+          <template v-if="Array.isArray(activeItem.metadata.pairedWith)">
+            <div v-for="(answer, index) in activeItem.metadata.pairedWith" 
+                :key="answer.fileId"
+                class="answer-item"
+            >
+              <el-image 
+                :src="answer.preview"
+                :preview-src-list="[answer.preview]"
+                fit="contain"
+                class="detail-image"
+              />
+            </div>
+          </template>
+          
+          <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
+          <template v-else>
             <el-image 
-              :src="answer.preview"
-              :preview-src-list="[answer.preview]"
+              :src="activeItem.metadata.pairedWith.preview"
+              :preview-src-list="[activeItem.metadata.pairedWith.preview]"
               fit="contain"
               class="detail-image"
             />
-          </div>
-        </template>
-        
-        <!-- 如果 pairedWith 是单个对象，保持原有显示方式 -->
-        <template v-else>
-          <el-image 
-            :src="activeItem.metadata.pairedWith.preview"
-            :preview-src-list="[activeItem.metadata.pairedWith.preview]"
-            fit="contain"
-            class="detail-image"
-          />
-        </template>
-      </div>
+          </template>
+        </div>
+      </transition>
     </div>
   </el-dialog>
 
   <!-- 添加右键菜单 -->
-  <div v-if="contextMenuVisible" 
-       class="context-menu"
-       :style="{ 
-         left: contextMenuPosition.x + 'px', 
-         top: contextMenuPosition.y + 'px'
-       }">
-    <div class="context-menu-item"
-         :class="{ disabled: formatTrainingStatus(contextMenuItem?.metadata?.nextTrainingDate).status === 'today' }"
-         @click="contextMenuItem && handleAddToTraining(contextMenuItem)">
-      加入今天训练
+  <transition name="context-menu-fade">
+    <div v-if="contextMenuVisible" 
+        class="context-menu"
+        :style="{ 
+          left: contextMenuPosition.x + 'px', 
+          top: contextMenuPosition.y + 'px'
+        }">
+      <div class="context-menu-item"
+          :class="{ disabled: formatTrainingStatus(contextMenuItem?.metadata?.nextTrainingDate).status === 'today' }"
+          @click="contextMenuItem && handleAddToTraining(contextMenuItem)">
+        加入今天训练
+      </div>
+      <div class="context-menu-item danger"
+          @click="contextMenuItem && handleDelete(contextMenuItem)">
+        删除
+      </div>
     </div>
-    <div class="context-menu-item danger"
-         @click="contextMenuItem && handleDelete(contextMenuItem)">
-      删除
-    </div>
-  </div>
+  </transition>
 </template>
 
 <style scoped>
@@ -517,6 +523,13 @@ defineComponent({
 /* 调整图片容器的最小高度 */
 .preview-item {
   min-height: 400px;
+  transition: all 0.3s ease;
+  transform: translateY(0);
+}
+
+.preview-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 /* 复用 preview-area 样式 */
@@ -810,10 +823,12 @@ defineComponent({
   color: #606266;
   font-size: 14px;
   line-height: 1.5;
+  transition: all 0.2s ease;
 }
 
 .context-menu-item:hover {
   background-color: #f5f7fa;
+  transform: translateX(3px);
 }
 
 .context-menu-item.disabled {
@@ -823,6 +838,7 @@ defineComponent({
 
 .context-menu-item.disabled:hover {
   background-color: transparent;
+  transform: none;
 }
 
 .context-menu-item.danger {
@@ -834,5 +850,42 @@ defineComponent({
 
 .context-menu-item.danger:hover {
   background-color: #fef0f0;
+}
+
+/* 添加动画相关样式 */
+.mistake-list-enter-active,
+.mistake-list-leave-active {
+  transition: all 0.5s ease;
+}
+
+.mistake-list-enter-from {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+.mistake-list-leave-to {
+  opacity: 0;
+  transform: translateY(-30px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.context-menu-fade-enter-active,
+.context-menu-fade-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.context-menu-fade-enter-from,
+.context-menu-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
 }
 </style> 

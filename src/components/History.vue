@@ -1829,49 +1829,37 @@ defineComponent({
   font-weight: 500;
 }
 
+/* 添加训练控制按钮的样式 */
+.training-control {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.training-control .el-button {
+  padding: 12px 24px;
+  font-size: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.training-control .el-button:not(.is-disabled):hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.training-control .el-button:not(.is-disabled):active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.training-control .el-button + .el-button {
+  margin-left: 16px;
+}
+
 /* 添加按钮禁用时的样式 */
 .el-button.is-disabled {
   cursor: not-allowed;
   opacity: 0.7;
-}
-
-/* 添加全局按钮悬停动画 */
-.el-button {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.el-button:not(.is-disabled):hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* 圆形按钮的特殊悬停效果 */
-.el-button.is-circle:not(.is-disabled):hover {
-  transform: translateY(-2px) scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* 导航按钮的特殊悬停效果 */
-.nav-button:not(.is-disabled):hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* 保持侧边按钮的原有悬停效果 */
-.side-button:hover {
-  transform: translateY(-50%) scale(1.05);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-/* 按钮组内按钮的特殊悬停效果 */
-.el-button-group .el-button:not(.is-disabled):hover {
-  transform: translateY(-2px);
-  z-index: 1;
-}
-
-/* 保持注意力模式按钮的原有悬停效果 */
-.attention-mode-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
 }
 </style> 

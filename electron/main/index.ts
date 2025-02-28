@@ -1524,13 +1524,9 @@ ipcMain.handle('file:export-selected-mistakes', async (_, params: {
     
     // 获取当前日期和时间
     const today = new Date()
-    const currentHour = today.getHours()
     
-    // 如果当前时间是下午6点之后，使用明天的日期
-    let exportDate = new Date(today)
-    if (currentHour >= 18) {
-      exportDate.setDate(exportDate.getDate() + 1)
-    }
+    // 直接使用当前日期，不考虑时间
+    const exportDate = today
     
     // 格式化日期字符串
     const dateStr = exportDate.toLocaleDateString('zh-CN', {
@@ -1693,13 +1689,18 @@ async function exportSingleMistake(params: {
   
   // 获取当前日期和时间
   const today = new Date()
-  const currentHour = today.getHours()
   
-  // 如果当前时间是下午6点之后，使用明天的日期
+  // 根据导出类型决定使用哪种日期逻辑
   let exportDate = new Date(today)
-  if (currentHour >= 18) {
-    exportDate.setDate(exportDate.getDate() + 1)
+  
+  // 如果是训练导出类型，并且当前时间是下午6点之后，使用明天的日期
+  if (params.exportType === 'training') {
+    const currentHour = today.getHours()
+    if (currentHour >= 18) {
+      exportDate.setDate(exportDate.getDate() + 1)
+    }
   }
+  // 如果是选择导出类型，直接使用当前日期
   
   // 格式化日期字符串
   const dateStr = exportDate.toLocaleDateString('zh-CN', {

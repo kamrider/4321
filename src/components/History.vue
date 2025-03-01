@@ -127,6 +127,11 @@ const handlePrevious = () => {
       currentExamIndex.value--
       const prevItem = selectedExamItems.value[currentExamIndex.value]
       if (isAttentionMode.value) {
+        // 停止当前计时器
+        if (timerInterval.value) {
+          clearInterval(timerInterval.value)
+          timerInterval.value = null
+        }
         activeItem.value = prevItem // 先设置 activeItem
         dialogVisible.value = false // 关闭当前题目
         showSchulteGrid.value = true // 显示舒尔特方格
@@ -142,6 +147,11 @@ const handlePrevious = () => {
       currentIndex.value--
       const prevItem = sortedHistoryList.value[currentIndex.value]
       if (isAttentionMode.value) {
+        // 停止当前计时器
+        if (timerInterval.value) {
+          clearInterval(timerInterval.value)
+          timerInterval.value = null
+        }
         activeItem.value = prevItem // 先设置 activeItem
         dialogVisible.value = false // 关闭当前题目
         showSchulteGrid.value = true // 显示舒尔特方格
@@ -169,6 +179,11 @@ const handleNext = () => {
       currentExamIndex.value++
       const nextItem = selectedExamItems.value[currentExamIndex.value]
       if (isAttentionMode.value) {
+        // 停止当前计时器
+        if (timerInterval.value) {
+          clearInterval(timerInterval.value)
+          timerInterval.value = null
+        }
         activeItem.value = nextItem // 先设置 activeItem
         dialogVisible.value = false // 关闭当前题目
         showSchulteGrid.value = true // 显示舒尔特方格
@@ -184,6 +199,11 @@ const handleNext = () => {
       currentIndex.value++
       const nextItem = sortedHistoryList.value[currentIndex.value]
       if (isAttentionMode.value) {
+        // 停止当前计时器
+        if (timerInterval.value) {
+          clearInterval(timerInterval.value)
+          timerInterval.value = null
+        }
         activeItem.value = nextItem // 先设置 activeItem
         dialogVisible.value = false // 关闭当前题目
         showSchulteGrid.value = true // 显示舒尔特方格
@@ -246,8 +266,19 @@ const NOTES = {
   DO_HIGH: 1046.50 // C6
 }
 
+// 添加时间颜色配置的类型定义
+type TimeColor = {
+  color: string;
+  background: string;
+}
+
+interface TimeColors {
+  [key: number]: TimeColor;
+  max: TimeColor;
+}
+
 // 添加时间颜色配置
-const TIME_COLORS = {
+const TIME_COLORS: TimeColors = {
   1: { color: '#67C23A', background: 'rgba(103, 194, 58, 0.1)' },   // 绿色 (0-1分钟)
   2: { color: '#409EFF', background: 'rgba(64, 158, 255, 0.1)' },   // 蓝色 (1-2分钟)
   3: { color: '#E6A23C', background: 'rgba(230, 162, 60, 0.1)' },   // 橙色 (2-3分钟)
@@ -458,7 +489,7 @@ const handleViewDetail = async (item: HistoryItem) => {
 
   // 如果是注意力模式，先显示舒尔特方格
   if (isAttentionMode.value) {
-    activeItem.value = item // 先设置 activeItem
+    activeItem.value = item // 先设置 activeItem，但不启动计时器
     showSchulteGrid.value = true
     return
   }
@@ -778,6 +809,9 @@ onMounted(async () => {
 const startExam = () => {
   if (selectedExamItems.value.length === 0) return
   
+  // 重置所有计时状态
+  timerStates.value = new Map<string, number>()
+  
   isInExam.value = true
   currentExamIndex.value = 0
   
@@ -789,6 +823,16 @@ const startExam = () => {
 const exitExam = () => {
   isInExam.value = false
   currentExamIndex.value = 0
+  
+  // 清理计时器
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+  
+  // 清理倒计时
+  stopCountdown()
+  
   handleCloseDialog() // 关闭当前对话框
   isTraining.value = false
 }
@@ -918,6 +962,10 @@ const handleSchulteComplete = (time: number) => {
   
   // 显示实际的题目详情并开始计时
   if (activeItem.value) {
+    // 确保计时器从0开始
+    if (timerStates.value.has(activeItem.value.fileId)) {
+      timerStates.value.set(activeItem.value.fileId, 0)
+    }
     showActualDetail(activeItem.value)
     isTraining.value = true
   }

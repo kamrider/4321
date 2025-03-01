@@ -361,30 +361,31 @@ const handleConfirm = () => {
 
 <style scoped>
 .pair-mistake-container {
-  padding: 20px;
+  padding: 16px;
   border-radius: 8px;
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .preview-area {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
   padding: 12px;
+  grid-template-columns: 1fr;
 }
 
 .preview-item {
   position: relative;
   border: 2px solid transparent;
   border-radius: 8px;
-  padding: 6px;
+  padding: 8px;
   transition: all 0.3s ease;
   animation: fadeIn 0.5s ease-in-out;
-  height: auto;
-  min-height: 360px;
   display: flex;
   flex-direction: column;
+  min-height: 320px;
 }
 
 @keyframes fadeIn {
@@ -422,10 +423,8 @@ const handleConfirm = () => {
   width: 100%;
   object-fit: contain;
   border-radius: 4px;
-  margin-bottom: 6px;
-  transition: transform 0.3s ease;
-  height: 220px;
-  min-height: unset;
+  margin-bottom: 8px;
+  height: 200px;
   flex: 1;
 }
 
@@ -434,14 +433,8 @@ const handleConfirm = () => {
 }
 
 .file-info {
-  margin-top: 6px;
-  transition: background-color 0.2s ease;
-  border-radius: 4px;
-  padding: 3px;
-}
-
-.file-info:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  margin-top: 8px;
+  padding: 4px;
 }
 
 .file-name {
@@ -486,28 +479,26 @@ const handleConfirm = () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* 响应式布局调整 */
-@media screen and (max-width: 600px) {
+/* 更精确的响应式断点 */
+/* 600px是一个项目的最小宽度加上容器padding和项目间距 */
+@media screen and (min-width: 600px) {
   .preview-area {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(1, 1fr); /* 设置为1列 */
   }
 }
 
-@media screen and (min-width: 601px) and (max-width: 900px) {
+/* 920px是两个项目的最小宽度加上容器padding和项目间距 */
+@media screen and (min-width: 920px) {
   .preview-area {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr); /* 设置为2列 */
+    grid-template-columns: repeat(3, 1fr); /* 3列 */
   }
 }
 
-@media screen and (min-width: 901px) {
+/* 只在非常宽的屏幕上才考虑4列 */
+@media screen and (min-width: 1240px) {
   .preview-area {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media screen and (min-width: 1600px) {
-  .preview-area {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, 1fr); /* 4列 */
   }
 }
 

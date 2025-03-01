@@ -16,7 +16,7 @@ const showAnswer = ref(false)
 
 // 添加计时器相关的响应式变量
 const time = ref(0)
-const timerInterval = ref<number | null>(null)
+const timerInterval = ref<ReturnType<typeof setInterval> | null>(null)
 
 // 添加提醒相关的响应式变量
 const hasReachedOneMinute = ref(false)
@@ -47,7 +47,7 @@ const showAnswerButtons = ref(false)
 
 // 在现有的响应式变量声明后添加
 const countdown = ref<number>(0)  // 倒计时剩余时间（秒）
-const countdownInterval = ref<number | null>(null)  // 倒计时定时器
+const countdownInterval = ref<ReturnType<typeof setInterval> | null>(null)  // 倒计时定时器
 const isCountdownRunning = ref(false)  // 倒计时状态
 
 // 添加编辑状态
@@ -73,6 +73,20 @@ const schulteTimeLimit = ref(18)  // 修改默认时间为20秒
 
 // 添加提交状态
 const isSubmitting = ref(false)
+
+// 添加训练状态
+const isTraining = ref(false)
+
+// 添加计算属性来判断是否可以训练
+const canTrain = computed(() => {
+  if (!activeItem.value?.metadata?.nextTrainingDate) {
+    return false
+  }
+  
+  const nextTrainingDate = new Date(activeItem.value.metadata.nextTrainingDate)
+  const now = new Date()
+  return nextTrainingDate <= now
+})
 
 // 计算已选题目的总时间
 const totalExamTime = computed(() => {
@@ -463,6 +477,9 @@ const showActualDetail = (item: HistoryItem) => {
   showAnswer.value = false
   showAnswerButtons.value = false
   
+  // 设置训练状态
+  isTraining.value = true
+  
   // 恢复原来的计时方式，不管是否在注意力模式下都立即开始计时
   loadTimerState(item.fileId)
   // 初始化倒计时
@@ -486,6 +503,7 @@ const handleCloseDialog = () => {
   time.value = 0
   showAnswer.value = false
   showAnswerButtons.value = false
+  isTraining.value = false
   stopCountdown()  // 添加这行
 }
 
@@ -767,6 +785,14 @@ const startExam = () => {
   handleViewDetail(selectedExamItems.value[0])
 }
 
+// 添加退出考试函数
+const exitExam = () => {
+  isInExam.value = false
+  currentExamIndex.value = 0
+  handleCloseDialog() // 关闭当前对话框
+  isTraining.value = false
+}
+
 // 添加导出模式切换函数
 const toggleExportMode = () => {
   isExportMode.value = !isExportMode.value
@@ -893,6 +919,7 @@ const handleSchulteComplete = (time: number) => {
   // 显示实际的题目详情并开始计时
   if (activeItem.value) {
     showActualDetail(activeItem.value)
+    isTraining.value = true
   }
 }
 
@@ -1020,7 +1047,7 @@ defineComponent({
             </el-button>
             <el-button 
               type="info" 
-              @click="cancelExamMode"
+              @click="exitExam"
             >
               取消
             </el-button>

@@ -369,18 +369,22 @@ const handleConfirm = () => {
 
 .preview-area {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
-  padding: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 12px;
 }
 
 .preview-item {
   position: relative;
   border: 2px solid transparent;
   border-radius: 8px;
-  padding: 12px;
+  padding: 6px;
   transition: all 0.3s ease;
   animation: fadeIn 0.5s ease-in-out;
+  height: auto;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes fadeIn {
@@ -416,13 +420,13 @@ const handleConfirm = () => {
 
 .preview-image {
   width: 100%;
-  height: auto;
-  min-height: 250px;
-  max-height: 400px;
   object-fit: contain;
   border-radius: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   transition: transform 0.3s ease;
+  height: 220px;
+  min-height: unset;
+  flex: 1;
 }
 
 .preview-image:hover {
@@ -430,10 +434,10 @@ const handleConfirm = () => {
 }
 
 .file-info {
-  margin-top: 8px;
+  margin-top: 6px;
   transition: background-color 0.2s ease;
   border-radius: 4px;
-  padding: 4px;
+  padding: 3px;
 }
 
 .file-info:hover {
@@ -483,21 +487,27 @@ const handleConfirm = () => {
 }
 
 /* 响应式布局调整 */
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 600px) {
   .preview-area {
     grid-template-columns: 1fr;
   }
 }
 
-@media screen and (min-width: 769px) and (max-width: 1200px) {
+@media screen and (min-width: 601px) and (max-width: 900px) {
   .preview-area {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media screen and (min-width: 1201px) {
+@media screen and (min-width: 901px) {
   .preview-area {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media screen and (min-width: 1600px) {
+  .preview-area {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 

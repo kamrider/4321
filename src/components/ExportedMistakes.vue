@@ -551,6 +551,14 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
                   @click.stop="toggleSelectItem(mistake, $event)"
                   class="select-indicator"
                 />
+                <!-- 添加导出类型标签 -->
+                <div class="export-type-badge" :class="{
+                  'selected-badge': mistake.exportType === 'selected',
+                  'training-badge': mistake.exportType === 'training'
+                }">
+                  {{ mistake.exportType === 'selected' ? '选择导出' : '训练导出' }}
+                </div>
+                
                 <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
                   需加强
                 </div>
@@ -990,12 +998,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 
 .warning-badge {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 8px;
+  left: 40px; /* 向右移动，避免与选择指示器重叠 */
   background-color: #f56c6c;
   color: white;
   padding: 4px 8px;
-  border-bottom-left-radius: 4px;
+  border-radius: 4px;
   font-size: 12px;
   z-index: 1;
   transition: all 0.3s ease;
@@ -1037,10 +1045,38 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   border-left-color: var(--el-color-success);
 }
 
-/* 添加类型标签样式 */
+/* 添加导出类型标签样式 */
 .export-type-badge {
   position: absolute;
   top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  z-index: 1;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.selected-badge {
+  background-color: #409EFF; /* Element Plus 主色 */
+}
+
+.training-badge {
+  background-color: #67C23A; /* Element Plus 成功色 */
+}
+
+.mistake-item:hover .export-type-badge {
+  transform: scale(1.05);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* 调整熟练度标签位置，避免与导出类型标签重叠 */
+.proficiency-label {
+  position: absolute;
+  top: 40px; /* 向下移动，避免与导出类型标签重叠 */
   left: 8px;
   padding: 2px 8px;
   border-radius: 4px;
@@ -1050,16 +1086,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   transition: all 0.3s ease;
 }
 
-.mistake-item:hover .export-type-badge {
-  transform: scale(1.05);
-}
-
-.selected-badge {
-  background-color: var(--el-color-primary);
-}
-
-.training-badge {
-  background-color: var(--el-color-success);
+/* 调整选择指示器位置，避免与导出类型标签重叠 */
+.select-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px; /* 改为左侧，避免与导出类型标签重叠 */
+  z-index: 2;
 }
 
 /* 添加新的样式 */

@@ -155,6 +155,42 @@ const getProficiencyColor = (proficiency: number | undefined) => {
   return 'proficiency-60'; // 紫色
 }
 
+// 添加一个函数来检查错题是否在更新的日期中已经存在
+const isNewerDateHasSameMistake = (mistake: ExportedMistake, currentDate: string) => {
+  // 如果没有原始文件ID，无法判断是否为同一错题
+  if (!mistake.originalFileId) return false;
+  
+  // 检查是否在更新的日期中存在相同的错题
+  for (const item of sortedExportedList.value) {
+    // 只检查比当前日期更新的日期
+    if (new Date(item.date.replace(/-/g, '/')).getTime() > 
+        new Date(currentDate.replace(/-/g, '/')).getTime()) {
+      // 在更新的日期中查找相同的错题
+      const hasSameMistake = item.mistakes.some(m => 
+        m.originalFileId === mistake.originalFileId
+      );
+      if (hasSameMistake) return true;
+    }
+  }
+  return false;
+};
+
+// 修改getItemClass方法，添加熟练度颜色
+const getItemClass = (mistake: ExportedMistake, currentDate?: string) => {
+  // 检查是否在更新的日期中已经存在
+  const isInNewerDate = currentDate ? isNewerDateHasSameMistake(mistake, currentDate) : false;
+  
+  return {
+    'mistake-item': true,
+    'selected-export': mistake.exportType === 'selected',
+    'training-export': mistake.exportType === 'training',
+    'item-selected': isSelectMode.value && isItemSelected(mistake),
+    // 只有当错题不在更新的日期中存在时，才应用熟练度颜色
+    [getProficiencyColor(mistake.metadata?.proficiency)]: !isInNewerDate,
+    'no-proficiency-color': isInNewerDate // 添加一个类来标记在更新日期已存在的错题
+  }
+}
+
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
@@ -433,17 +469,6 @@ const batchExportSelectedItems = async () => {
   }
 }
 
-// 修改getItemClass方法，添加熟练度颜色
-const getItemClass = (mistake: ExportedMistake) => {
-  return {
-    'mistake-item': true,
-    'selected-export': mistake.exportType === 'selected',
-    'training-export': mistake.exportType === 'training',
-    'item-selected': isSelectMode.value && isItemSelected(mistake),
-    [getProficiencyColor(mistake.metadata?.proficiency)]: true
-  }
-}
-
 // 添加导出到Word的方法
 const handleExportToWord = async (date: string, type: string = 'alternate') => {
   if (exportingDates.value[date]) return
@@ -542,7 +567,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
             <div class="mistakes-grid">
               <div v-for="mistake in item.mistakes"
                    :key="mistake.path"
-                   :class="getItemClass(mistake)"
+                   :class="getItemClass(mistake, item.date)"
                    @click="isSelectMode ? toggleSelectItem(mistake, $event) : handleViewDetail(mistake)">
                 <!-- 添加选择指示器 -->
                 <el-checkbox 
@@ -563,6 +588,12 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
                 <div v-if="mistake.metadata?.proficiency !== undefined" class="proficiency-label">
                   熟练度: {{ mistake.metadata.proficiency }}
                 </div>
+                
+                <!-- 添加重复错题提示 -->
+                <div v-if="isNewerDateHasSameMistake(mistake, item.date)" class="duplicate-hint">
+                  已在新日期存在
+                </div>
+                
                 <el-image 
                   :src="mistake.preview"
                   fit="contain"
@@ -1288,6 +1319,41 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 }
 
 .mistake-item:hover .proficiency-label {
+  transform: scale(1.05);
+}
+
+/* 添加无熟练度颜色样式 */
+.no-proficiency-color {
+  border-left-color: #dcdfe6 !important; /* 使用浅灰色边框 */
+  box-shadow: none;
+  opacity: 0.85; /* 稍微降低透明度 */
+}
+
+.no-proficiency-color:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15) !important; /* 只保留普通悬停效果 */
+}
+
+.no-proficiency-color .proficiency-label {
+  background-color: #909399; /* 使用灰色背景 */
+  color: white;
+}
+
+/* 添加重复错题提示样式 */
+.duplicate-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background-color: rgba(144, 147, 153, 0.8);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.mistake-item:hover .duplicate-hint {
+  background-color: rgba(144, 147, 153, 0.9);
   transform: scale(1.05);
 }
 </style> 

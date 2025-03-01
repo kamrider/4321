@@ -357,21 +357,55 @@ const batchExportSelectedItems = async () => {
   
   isExporting.value = true
   try {
-    // 只获取路径信息，避免复杂对象
-    const paths = selectedItems.value
-      .filter(item => item.path)
-      .map(item => item.path)
+    // 准备导出数据，包含完整的错题和答案信息
+    const mistakesToExport = await Promise.all(
+      selectedItems.value.map(async (item) => {
+        // 如果没有原始文件ID，则无法获取完整信息
+        if (!item.originalFileId) {
+          return {
+            mistake: { path: item.path },
+            answer: null
+          }
+        }
+        
+        try {
+          // 获取完整的错题信息
+          const mistakeResult = await window.ipcRenderer.invoke('file:get-mistake-details', item.originalFileId)
+          if (!mistakeResult.success) {
+            throw new Error(`获取错题详情失败: ${mistakeResult.error}`)
+          }
+          
+          return {
+            mistake: mistakeResult.data,
+            answer: mistakeResult.data.metadata?.pairedWith || null
+          }
+        } catch (err) {
+          console.error(`获取错题 ${item.originalFileId} 详情失败:`, err)
+          // 如果获取详情失败，则使用简单信息
+          return {
+            mistake: { path: item.path },
+            answer: null
+          }
+        }
+      })
+    )
     
-    if (paths.length === 0) {
+    // 过滤掉无效的项目
+    const validMistakes = mistakesToExport.filter(item => item.mistake && item.mistake.path)
+    
+    if (validMistakes.length === 0) {
       ElMessage.warning('没有可导出的项目')
       return
     }
     
-    // 直接使用 invoke 方法
-    const result = await window.ipcRenderer.invoke('file:export', paths)
+    // 使用 export-selected-mistakes 接口
+    const result = await window.ipcRenderer.invoke('file:export-selected-mistakes', {
+      mistakes: validMistakes,
+      exportType: 'training'
+    })
     
     if (result.success) {
-      ElMessage.success(`成功导出 ${paths.length} 个错题`)
+      ElMessage.success(`成功导出 ${validMistakes.length} 个错题`)
       isSelectMode.value = false
       selectedItems.value = []
     } else {
@@ -379,7 +413,7 @@ const batchExportSelectedItems = async () => {
     }
   } catch (err) {
     console.error('批量导出失败:', err)
-    ElMessage.error(`批量导出失败: ${err}`)
+    ElMessage.error(`批量导出失败: ${err.message || err}`)
   } finally {
     isExporting.value = false
   }

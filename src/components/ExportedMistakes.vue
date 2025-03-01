@@ -559,9 +559,6 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
                   {{ mistake.exportType === 'selected' ? '选择导出' : '训练导出' }}
                 </div>
                 
-                <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
-                  需加强
-                </div>
                 <!-- 添加熟练度标签 -->
                 <div v-if="mistake.metadata?.proficiency !== undefined" class="proficiency-label">
                   熟练度: {{ mistake.metadata.proficiency }}
@@ -580,15 +577,6 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
                 
                 <div class="answer-count" v-if="mistake.answers.length > 0">
                   {{ mistake.answers.length }} 个答案
-                </div>
-
-                <div class="mistake-info" v-if="mistake.metadata">
-                  <div class="proficiency" :class="{ 'zero-proficiency': mistake.metadata.proficiency === 0 }">
-                    熟练度: {{ mistake.metadata.proficiency }}
-                  </div>
-                  <div class="next-training">
-                    下次训练: {{ formatDate(mistake.metadata.nextTrainingDate) }}
-                  </div>
                 </div>
               </div>
             </div>
@@ -841,28 +829,6 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   transform: scale(1.05);
 }
 
-.mistake-info {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  transition: all 0.3s ease;
-}
-
-.mistake-item:hover .mistake-info {
-  background: rgba(0, 0, 0, 0.8);
-  transform: scale(1.05);
-}
-
-.proficiency {
-  margin-bottom: 4px;
-  transition: color 0.3s ease;
-}
-
 .detail-container {
   display: flex;
   flex-direction: column;
@@ -954,64 +920,6 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   font-size: 14px;
   text-align: center;
   transition: all 0.3s ease;
-}
-
-.zero-proficiency {
-  color: #f56c6c;
-  font-weight: bold;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-.zero-proficiency-item {
-  border: 2px solid #f56c6c !important;
-  box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
-  animation: pulseBorder 2s infinite;
-}
-
-@keyframes pulseBorder {
-  0% {
-    box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba(245, 108, 108, 0.5);
-  }
-  100% {
-    box-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
-  }
-}
-
-.zero-proficiency-item:hover {
-  box-shadow: 0 0 12px rgba(245, 108, 108, 0.5) !important;
-}
-
-.warning-badge {
-  position: absolute;
-  top: 8px;
-  left: 40px; /* 向右移动，避免与选择指示器重叠 */
-  background-color: #f56c6c;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  z-index: 1;
-  transition: all 0.3s ease;
-}
-
-.mistake-item:hover .warning-badge {
-  background-color: #f78989;
-  transform: scale(1.05);
 }
 
 .filter-bar {
@@ -1266,7 +1174,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 .select-indicator {
   position: absolute;
   top: 10px;
-  right: 10px;
+  left: 10px; /* 改为左侧，避免与导出类型标签重叠 */
   z-index: 2;
 }
 

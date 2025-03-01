@@ -141,6 +141,20 @@ const isSelectMode = ref(false)
 const selectedItems = ref<ExportedMistake[]>([])
 const isExporting = ref(false)
 
+// 添加根据熟练度获取颜色的函数
+const getProficiencyColor = (proficiency: number | undefined) => {
+  if (proficiency === undefined) return '';
+  
+  // 根据熟练度返回对应的颜色
+  if (proficiency === 0) return 'proficiency-0'; // 赤色
+  if (proficiency <= 10) return 'proficiency-10'; // 橙色
+  if (proficiency <= 20) return 'proficiency-20'; // 黄色
+  if (proficiency <= 30) return 'proficiency-30'; // 绿色
+  if (proficiency <= 40) return 'proficiency-40'; // 青色
+  if (proficiency <= 50) return 'proficiency-50'; // 蓝色
+  return 'proficiency-60'; // 紫色
+}
+
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
@@ -419,13 +433,14 @@ const batchExportSelectedItems = async () => {
   }
 }
 
-// 修改getItemClass方法，添加选中状态的样式
+// 修改getItemClass方法，添加熟练度颜色
 const getItemClass = (mistake: ExportedMistake) => {
   return {
     'mistake-item': true,
     'selected-export': mistake.exportType === 'selected',
     'training-export': mistake.exportType === 'training',
-    'item-selected': isSelectMode.value && isItemSelected(mistake)
+    'item-selected': isSelectMode.value && isItemSelected(mistake),
+    [getProficiencyColor(mistake.metadata?.proficiency)]: true
   }
 }
 
@@ -538,6 +553,10 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
                 />
                 <div v-if="mistake.metadata?.proficiency === 0" class="warning-badge">
                   需加强
+                </div>
+                <!-- 添加熟练度标签 -->
+                <div v-if="mistake.metadata?.proficiency !== undefined" class="proficiency-label">
+                  熟练度: {{ mistake.metadata.proficiency }}
                 </div>
                 <el-image 
                   :src="mistake.preview"
@@ -1217,5 +1236,118 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   top: 10px;
   right: 10px;
   z-index: 2;
+}
+
+/* 添加熟练度颜色样式 */
+.proficiency-0 {
+  border-left-color: #ff0000 !important; /* 赤色 */
+  box-shadow: 0 0 8px rgba(255, 0, 0, 0.3);
+}
+
+.proficiency-10 {
+  border-left-color: #ff7f00 !important; /* 橙色 */
+  box-shadow: 0 0 8px rgba(255, 127, 0, 0.3);
+}
+
+.proficiency-20 {
+  border-left-color: #ffff00 !important; /* 黄色 */
+  box-shadow: 0 0 8px rgba(255, 255, 0, 0.3);
+}
+
+.proficiency-30 {
+  border-left-color: #00ff00 !important; /* 绿色 */
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+}
+
+.proficiency-40 {
+  border-left-color: #00ffff !important; /* 青色 */
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+}
+
+.proficiency-50 {
+  border-left-color: #0000ff !important; /* 蓝色 */
+  box-shadow: 0 0 8px rgba(0, 0, 255, 0.3);
+}
+
+.proficiency-60 {
+  border-left-color: #8b00ff !important; /* 紫色 */
+  box-shadow: 0 0 8px rgba(139, 0, 255, 0.3);
+}
+
+/* 添加熟练度颜色的悬停效果 */
+.proficiency-0:hover {
+  box-shadow: 0 8px 16px rgba(255, 0, 0, 0.4) !important;
+}
+
+.proficiency-10:hover {
+  box-shadow: 0 8px 16px rgba(255, 127, 0, 0.4) !important;
+}
+
+.proficiency-20:hover {
+  box-shadow: 0 8px 16px rgba(255, 255, 0, 0.4) !important;
+}
+
+.proficiency-30:hover {
+  box-shadow: 0 8px 16px rgba(0, 255, 0, 0.4) !important;
+}
+
+.proficiency-40:hover {
+  box-shadow: 0 8px 16px rgba(0, 255, 255, 0.4) !important;
+}
+
+.proficiency-50:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 255, 0.4) !important;
+}
+
+.proficiency-60:hover {
+  box-shadow: 0 8px 16px rgba(139, 0, 255, 0.4) !important;
+}
+
+/* 添加熟练度标签 */
+.proficiency-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: white;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.proficiency-0 .proficiency-label {
+  background-color: #ff0000;
+}
+
+.proficiency-10 .proficiency-label {
+  background-color: #ff7f00;
+}
+
+.proficiency-20 .proficiency-label {
+  background-color: #ffff00;
+  color: #333; /* 黄色背景使用深色文字 */
+}
+
+.proficiency-30 .proficiency-label {
+  background-color: #00ff00;
+  color: #333; /* 绿色背景使用深色文字 */
+}
+
+.proficiency-40 .proficiency-label {
+  background-color: #00ffff;
+  color: #333; /* 青色背景使用深色文字 */
+}
+
+.proficiency-50 .proficiency-label {
+  background-color: #0000ff;
+}
+
+.proficiency-60 .proficiency-label {
+  background-color: #8b00ff;
+}
+
+.mistake-item:hover .proficiency-label {
+  transform: scale(1.05);
 }
 </style> 

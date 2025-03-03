@@ -327,6 +327,8 @@ async function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
+      // 添加这一行，关闭 web 安全限制
+      webSecurity: false,  // 允许加载本地文件
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
       // nodeIntegration: true,
 
@@ -336,7 +338,7 @@ async function createWindow() {
     },
   })
 
-  if (VITE_DEV_SERVER_URL) { // #298
+  if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
     win.loadFile(indexHtml)
@@ -1924,62 +1926,54 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
       }[]
     }[] = []
 
-    // 检查导出目录是否存在
+    // 1. 检查导出目录是否存在
     if (!fs.existsSync(exportBaseDir)) {
       return { success: true, data: [] }
     }
 
-    // 获取所有日期文件夹
+    // 2. 获取所有日期文件夹
     const dateDirs = fs.readdirSync(exportBaseDir)
     
-    for (const dateDir of dateDirs) {
+    // 3. 并行处理每个日期文件夹
+    const datePromises = dateDirs.map(async dateDir => {
       const datePath = path.join(exportBaseDir, dateDir)
       const mistakesDir = path.join(datePath, '错题')
       const answersDir = path.join(datePath, '答案')
       const metadataDir = path.join(datePath, 'metadata')
       const previewsDir = path.join(datePath, 'previews')
       
+      // 检查必要的目录是否存在
       if (!fs.existsSync(mistakesDir) || !fs.existsSync(answersDir)) {
-        continue
+        return null
       }
 
+      // 4. 读取该日期下的所有错题
       const mistakes = fs.readdirSync(mistakesDir)
-      const dateItem = {
-        date: dateDir,
-        path: datePath,
-        mistakes: [] as typeof result[0]['mistakes']
-      }
-
-      for (const mistake of mistakes) {
+      
+      // 5. 并行处理每个错题
+      const mistakePromises = mistakes.map(async mistake => {
         const mistakePath = path.join(mistakesDir, mistake)
         const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
+        const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
         
-        // 获取错题元数据
+        // 6. 读取错题元数据（如果存在）
         let mistakeMetadata = null
-        try {
-          const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
-          if (fs.existsSync(metadataPath)) {
+        if (fs.existsSync(metadataPath)) {
+          try {
             const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
             mistakeMetadata = JSON.parse(metadataContent)
+          } catch (error) {
+            console.error('读取错题元数据失败:', error)
           }
-        } catch (error) {
-          console.error('读取错题元数据失败:', error)
         }
-        
-        // 获取预览图
+
+        // 7. 处理预览图路径
         let preview = ''
-        try {
-          if (mistakeMetadata?.previewPath) {
-            const previewPath = path.join(datePath, mistakeMetadata.previewPath)
-            if (fs.existsSync(previewPath)) {
-              const previewData = await fs.promises.readFile(previewPath)
-              preview = `data:image/webp;base64,${previewData.toString('base64')}`
-            }
-          }
-          
-          // 如果没有预览图或预览图不存在，生成一个新的
-          if (!preview) {
-            const previewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+        const previewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+        
+        // 如果预览图不存在，生成预览图
+        if (!fs.existsSync(previewPath)) {
+          try {
             await sharp(mistakePath)
               .resize(800, 800, {
                 fit: 'inside',
@@ -1990,108 +1984,89 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
                 effort: 4
               })
               .toFile(previewPath)
-            
-            const previewData = await fs.promises.readFile(previewPath)
-            preview = `data:image/webp;base64,${previewData.toString('base64')}`
-            
-            // 更新元数据中的预览图路径
-            if (mistakeMetadata) {
-              mistakeMetadata.previewPath = path.relative(datePath, previewPath)
-              await fs.promises.writeFile(
-                path.join(metadataDir, `错题${mistakeNumber}.json`),
-                JSON.stringify(mistakeMetadata, null, 2)
-              )
-            }
+          } catch (error) {
+            console.error('生成预览图失败:', error)
           }
-        } catch (error) {
-          console.error('处理预览图失败:', error)
         }
         
-        // 获取对应的答案
+        // 直接使用文件路径
+        preview = `file://${previewPath}`
+
+        // 8. 并行处理对应的答案
         const answerPattern = new RegExp(`^${mistakeNumber}\\.`)
-        const answers = fs.readdirSync(answersDir)
+        const answerFiles = fs.readdirSync(answersDir)
           .filter(file => answerPattern.test(file))
-          .map(async file => {
-            const answerPath = path.join(answersDir, file)
-            
-            // 获取答案元数据
-            let answerMetadata = null
+        
+        const answerPromises = answerFiles.map(async file => {
+          const answerPath = path.join(answersDir, file)
+          const answerMetadataPath = path.join(metadataDir, `答案${file}.json`)
+          const answerPreviewPath = path.join(previewsDir, `答案${file}.webp`)
+          
+          // 读取答案元数据
+          let answerMetadata = null
+          if (fs.existsSync(answerMetadataPath)) {
             try {
-              const metadataPath = path.join(metadataDir, `答案${file}.json`)
-              if (fs.existsSync(metadataPath)) {
-                const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
-                answerMetadata = JSON.parse(metadataContent)
-              }
+              const metadataContent = await fs.promises.readFile(answerMetadataPath, 'utf-8')
+              answerMetadata = JSON.parse(metadataContent)
             } catch (error) {
               console.error('读取答案元数据失败:', error)
             }
-            
-            // 获取答案预览图
-            let answerPreview = ''
-            try {
-              if (answerMetadata?.previewPath) {
-                const previewPath = path.join(datePath, answerMetadata.previewPath)
-                if (fs.existsSync(previewPath)) {
-                  const previewData = await fs.promises.readFile(previewPath)
-                  answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
-                }
-              }
-              
-              // 如果没有预览图或预览图不存在，生成一个新的
-              if (!answerPreview) {
-                const previewPath = path.join(previewsDir, `答案${file}.webp`)
-                await sharp(answerPath)
-                  .resize(800, 800, {
-                    fit: 'inside',
-                    withoutEnlargement: false
-                  })
-                  .webp({ 
-                    quality: 85,
-                    effort: 4
-                  })
-                  .toFile(previewPath)
-                
-                const previewData = await fs.promises.readFile(previewPath)
-                answerPreview = `data:image/webp;base64,${previewData.toString('base64')}`
-                
-                // 更新元数据中的预览图路径
-                if (answerMetadata) {
-                  answerMetadata.previewPath = path.relative(datePath, previewPath)
-                  await fs.promises.writeFile(
-                    path.join(metadataDir, `答案${file}.json`),
-                    JSON.stringify(answerMetadata, null, 2)
-                  )
-                }
-              }
-            } catch (error) {
-              console.error('处理答案预览图失败:', error)
-            }
-            
-            return {
-              path: answerPath,
-              preview: answerPreview,
-              originalFileId: answerMetadata?.originalFileId,
-              metadata: answerMetadata?.metadata
-            }
-          })
+          }
 
-        dateItem.mistakes.push({
+          // 如果答案预览图不存在，生成预览图
+          if (!fs.existsSync(answerPreviewPath)) {
+            try {
+              await sharp(answerPath)
+                .resize(800, 800, {
+                  fit: 'inside',
+                  withoutEnlargement: false
+                })
+                .webp({ 
+                  quality: 85,
+                  effort: 4
+                })
+                .toFile(answerPreviewPath)
+            } catch (error) {
+              console.error('生成答案预览图失败:', error)
+            }
+          }
+
+          return {
+            path: answerPath,
+            preview: `file://${answerPreviewPath}`,
+            originalFileId: answerMetadata?.originalFileId,
+            metadata: answerMetadata?.metadata
+          }
+        })
+
+        const answers = await Promise.all(answerPromises)
+
+        return {
           path: mistakePath,
           preview,
           originalFileId: mistakeMetadata?.originalFileId,
           exportType: mistakeMetadata?.exportType,
           metadata: mistakeMetadata?.metadata,
-          answers: await Promise.all(answers)
-        })
+          answers
+        }
+      })
+
+      const mistakeResults = await Promise.all(mistakePromises)
+      
+      return {
+        date: dateDir,
+        path: datePath,
+        mistakes: mistakeResults.filter(Boolean) // 过滤掉可能的null结果
       }
+    })
 
-      result.push(dateItem)
-    }
+    // 9. 等待所有日期处理完成
+    const dateResults = (await Promise.all(datePromises)).filter(Boolean)
 
-    // 按日期倒序排序
-    result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    // 10. 按日期倒序排序
+    dateResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    return { success: true, data: result }
+    return { success: true, data: dateResults }
   } catch (error) {
     console.error('获取导出记录失败:', error)
     return { success: false, error: error.message }

@@ -263,7 +263,13 @@ export interface IpcRenderer {
       success: boolean
       error?: string
     }>
-    exportDateToWord: (date: string, type: string) => Promise<Result>
+    exportDateToWord: (date: string, type: string, filterType: 'all' | 'selected' | 'training') => Promise<{
+      success: boolean
+      data?: {
+        filePath: string
+      }
+      error?: string
+    }>
     exportMistakesBatch: (params: ExportMistakesBatchParams) => Promise<ExportMistakesBatchResult>
   }
 }
@@ -424,8 +430,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       ipcRenderer.invoke('getFrozen', fileId),
     setMultipleFrozen: (fileIds: string[], isFrozen: boolean) => 
       ipcRenderer.invoke('setMultipleFrozen', fileIds, isFrozen),
-    exportDateToWord: (date: string, type: string) => 
-      ipcRenderer.invoke('file:export-date-to-word', date, type),
+    exportDateToWord: (date: string, type: string, filterType: 'all' | 'selected' | 'training') => 
+      ipcRenderer.invoke('file:export-date-to-word', date, type, filterType),
     exportMistakesBatch: (params: ExportMistakesBatchParams) => 
       ipcRenderer.invoke('file:export-mistakes-batch', params),
   }
@@ -594,7 +600,13 @@ declare global {
           success: boolean
           error?: string
         }>
-        exportDateToWord: (date: string, type: string) => Promise<Result>
+        exportDateToWord: (date: string, type: string, filterType: 'all' | 'selected' | 'training') => Promise<{
+          success: boolean
+          data?: {
+            filePath: string
+          }
+          error?: string
+        }>
         exportMistakesBatch: (params: ExportMistakesBatchParams) => Promise<ExportMistakesBatchResult>
       }
     }

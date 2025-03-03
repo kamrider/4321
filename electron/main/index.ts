@@ -2092,12 +2092,13 @@ ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
 })
 
 // 添加导出到 Word 的处理函数
-ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: string = 'alternate') => {
+ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: string = 'alternate', filterType: 'all' | 'selected' | 'training' = 'all') => {
   try {
     const exportBaseDir = getExportBaseDir()
     const datePath = path.join(exportBaseDir, date)
     const mistakesDir = path.join(datePath, '错题')
     const answersDir = path.join(datePath, '答案')
+    const metadataDir = path.join(datePath, 'metadata')
 
     // 获取用户名（从路径中提取）
     const pathParts = exportBaseDir.split(path.sep)
@@ -2108,16 +2109,45 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
       throw new Error('找不到指定日期的错题文件')
     }
 
-    // 让用户选择保存位置（加入用户名）
+    // 让用户选择保存位置（加入用户名和过滤类型）
+    const filterTypeText = filterType === 'all' ? '全部' : filterType === 'selected' ? '精选' : '训练'
     const result = await dialog.showSaveDialog({
       title: '保存 Word 文档',
-      defaultPath: `${userName}_错题集_${date}.docx`,
+      defaultPath: `${userName}_错题集_${filterTypeText}_${date}.docx`,
       filters: [{ name: 'Word 文档', extensions: ['docx'] }]
     })
 
     if (result.canceled || !result.filePath) {
       return { success: false, error: '未选择保存位置' }
     }
+
+    // 读取并筛选错题
+    const mistakes = fs.readdirSync(mistakesDir)
+      .filter(file => !file.startsWith('.'))
+      .filter(file => {
+        // 如果是全部导出，不需要过滤
+        if (filterType === 'all') return true;
+        
+        // 读取错题的元数据
+        const mistakeNumber = file.match(/\d+/)?.[0];
+        if (!mistakeNumber) return false;
+        
+        const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`);
+        if (!fs.existsSync(metadataPath)) return false;
+        
+        try {
+          const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+          return metadata.exportType === filterType;
+        } catch (error) {
+          console.error('读取元数据失败:', error);
+          return false;
+        }
+      })
+      .sort((a, b) => {
+        const numA = parseInt(a.match(/\d+/)?.[0] || '0')
+        const numB = parseInt(b.match(/\d+/)?.[0] || '0')
+        return numA - numB
+      });
 
     const doc = new Document({
       sections: [{
@@ -2126,7 +2156,7 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
         },
         children: [
           new Paragraph({
-            text: `${userName} - 错题集`,  // 主标题
+            text: `${userName} - ${filterTypeText}错题集`,  // 主标题加入过滤类型
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
             style: {
@@ -2143,17 +2173,17 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
             }
           }),
           new Paragraph({
-            text: `共 ${fs.readdirSync(mistakesDir).filter(file => !file.startsWith('.')).length} 道错题`,
+            text: `共 ${mistakes.length} 道错题`,
             alignment: AlignmentType.CENTER,
             style: {
-              size: 20 // 错题数量字体大小
+              size: 20
             }
           }),
           new Paragraph({
             text: `导出时间：${new Date().toLocaleString('zh-CN')}`,
             alignment: AlignmentType.CENTER,
             style: {
-              size: 16 // 导出时间字体大小
+              size: 16
             }
           }),
           new Paragraph({
@@ -2173,15 +2203,6 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
       },
       children: []
     }
-
-    // 读取并排序错题文件
-    const mistakes = fs.readdirSync(mistakesDir)
-      .filter(file => !file.startsWith('.'))
-      .sort((a, b) => {
-        const numA = parseInt(a.match(/\d+/)?.[0] || '0')
-        const numB = parseInt(b.match(/\d+/)?.[0] || '0')
-        return numA - numB
-      })
 
     switch (exportType) {
       case 'alternate':
@@ -2316,7 +2337,7 @@ ipcMain.handle('file:export-date-to-word', async (_, date: string, exportType: s
             )
           }
         }
-        break;  // 这里缺少了 break 语句
+        break;
 
       case 'separated':
         // 先显示所有错题

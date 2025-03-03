@@ -425,7 +425,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   
   exportingDates.value[date] = true
   try {
-    const result = await window.ipcRenderer.file.exportDateToWord(date, type)
+    const result = await window.ipcRenderer.file.exportDateToWord(date, type, filterType.value)
     
     if (result.success) {
       ElMessage.success('导出成功')

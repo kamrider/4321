@@ -1947,8 +1947,14 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
         return null
       }
 
-      // 4. 读取该日期下的所有错题
+      // 4. 读取该日期下的所有错题并按序号排序
       const mistakes = fs.readdirSync(mistakesDir)
+        .filter(file => !file.startsWith('.'))
+        .sort((a, b) => {
+          const numA = parseInt(a.match(/\d+/)?.[0] || '0')
+          const numB = parseInt(b.match(/\d+/)?.[0] || '0')
+          return numA - numB
+        })
       
       // 5. 并行处理每个错题
       const mistakePromises = mistakes.map(async mistake => {

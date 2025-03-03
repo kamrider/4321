@@ -71,6 +71,52 @@ const contextMenuVisible = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const contextMenuItem = ref<MistakeItem | null>(null)
 
+// 添加统计相关的计算属性
+const statistics = computed(() => {
+  if (!mistakeList.value) return {
+    total: 0,
+    needTraining: 0,
+    overdue: 0,
+    todayTraining: 0,
+    averageProficiency: 0
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const stats = {
+    total: mistakeList.value.length,
+    needTraining: 0,
+    overdue: 0,
+    todayTraining: 0,
+    averageProficiency: 0
+  }
+
+  let totalProficiency = 0
+
+  mistakeList.value.forEach(item => {
+    if (item.metadata?.nextTrainingDate) {
+      const trainingDate = new Date(item.metadata.nextTrainingDate)
+      trainingDate.setHours(0, 0, 0, 0)
+      
+      if (trainingDate.getTime() === today.getTime()) {
+        stats.todayTraining++
+      } else if (trainingDate.getTime() < today.getTime()) {
+        stats.overdue++
+      }
+    }
+
+    if (item.metadata?.proficiency !== undefined) {
+      totalProficiency += item.metadata.proficiency
+    }
+  })
+
+  stats.needTraining = stats.todayTraining + stats.overdue
+  stats.averageProficiency = Math.round(totalProficiency / stats.total) || 0
+
+  return stats
+})
+
 // 修改获取数据的过滤逻辑
 onMounted(async () => {
   try {
@@ -308,6 +354,30 @@ defineComponent({
 
 <template>
   <div class="mistake-container">
+    <!-- 添加统计信息展示 -->
+    <div class="statistics-bar">
+      <div class="stat-item">
+        <div class="stat-value">{{ statistics.total }}</div>
+        <div class="stat-label">总错题数</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">{{ statistics.needTraining }}</div>
+        <div class="stat-label">待训练</div>
+      </div>
+      <div class="stat-item warning">
+        <div class="stat-value">{{ statistics.overdue }}</div>
+        <div class="stat-label">已逾期</div>
+      </div>
+      <div class="stat-item primary">
+        <div class="stat-value">{{ statistics.todayTraining }}</div>
+        <div class="stat-label">今日训练</div>
+      </div>
+      <div class="stat-item success">
+        <div class="stat-value">{{ statistics.averageProficiency }}%</div>
+        <div class="stat-label">平均熟练度</div>
+      </div>
+    </div>
+
     <!-- 添加顶部导航栏 -->
     <div class="nav-header">
       <div class="sort-controls">
@@ -945,5 +1015,74 @@ defineComponent({
 .context-menu-fade-leave-to {
   opacity: 0;
   transform: scale(0.95);
+}
+
+/* 添加统计栏样式 */
+.statistics-bar {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: var(--el-box-shadow-lighter);
+}
+
+.stat-item {
+  text-align: center;
+  padding: 0 20px;
+  position: relative;
+}
+
+.stat-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 70%;
+  width: 1px;
+  background-color: var(--el-border-color-lighter);
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--el-text-color-primary);
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+
+.stat-item.warning .stat-value {
+  color: var(--el-color-warning);
+}
+
+.stat-item.primary .stat-value {
+  color: var(--el-color-primary);
+}
+
+.stat-item.success .stat-value {
+  color: var(--el-color-success);
+}
+
+/* 为统计数字添加动画效果 */
+@keyframes countUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.stat-value {
+  animation: countUp 0.5s ease-out;
 }
 </style> 

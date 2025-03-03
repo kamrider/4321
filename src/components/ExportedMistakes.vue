@@ -5,7 +5,7 @@ defineComponent({
   name: 'ExportedMistakes'
 })
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Delete, Check, Close, Printer, ArrowDown, Select, Download } from '@element-plus/icons-vue'
 
@@ -43,46 +43,6 @@ const isTraining = ref(false)
 
 // 添加过滤类型的状态
 const filterType = ref<'all' | 'selected' | 'training'>('all')
-
-// 添加计算属性来对列表进行排序
-const sortedExportedList = computed(() => {
-  return exportedList.value.map(item => {
-    // 对每天的错题进行排序
-    const sortedMistakes = [...item.mistakes].sort((a, b) => {
-      // 从文件路径中提取序号
-      const getNumber = (path: string) => {
-        const match = path.match(/错题(\d+)\./);
-        return match ? parseInt(match[1]) : 0;
-      };
-      return getNumber(a.path) - getNumber(b.path);
-    });
-    
-    return {
-      ...item,
-      mistakes: sortedMistakes
-    };
-  }).sort((a, b) => {
-    // 日期文件夹按照时间降序排序
-    const dateA = new Date(a.date.replace(/-/g, '/')).getTime();
-    const dateB = new Date(b.date.replace(/-/g, '/')).getTime();
-    return dateB - dateA;
-  });
-});
-
-// 修改计算属性，添加过滤逻辑
-const filteredExportedList = computed(() => {
-  return sortedExportedList.value.map(item => {
-    const filteredMistakes = item.mistakes.filter(mistake => {
-      if (filterType.value === 'all') return true;
-      return mistake.exportType === filterType.value;
-    });
-    
-    return {
-      ...item,
-      mistakes: filteredMistakes
-    };
-  }).filter(item => item.mistakes.length > 0);
-});
 
 // 添加计算属性来判断是否可以训练
 const canTrain = computed(() => {
@@ -161,7 +121,7 @@ const isNewerDateHasSameMistake = (mistake: ExportedMistake, currentDate: string
   if (!mistake.originalFileId) return false;
   
   // 检查是否在更新的日期中存在相同的错题
-  for (const item of sortedExportedList.value) {
+  for (const item of exportedList.value) {
     // 只检查比当前日期更新的日期
     if (new Date(item.date.replace(/-/g, '/')).getTime() > 
         new Date(currentDate.replace(/-/g, '/')).getTime()) {
@@ -191,23 +151,23 @@ const getItemClass = (mistake: ExportedMistake, currentDate?: string) => {
   }
 }
 
+// 在 script setup 部分添加新的响应式变量
+const loadedData = ref<ExportedItem[]>([])
+const isInitialLoading = ref(true)
+const isLoadingMore = ref(false)
+const allDataLoaded = ref(false)
+
+// 修改 onMounted 函数
 onMounted(async () => {
   try {
     const result = await window.ipcRenderer.invoke('file:get-exported-mistakes')
     if (result.success) {
-      // 获取每个源文件的metadata
-      for (const item of result.data) {
-        for (const mistake of item.mistakes) {
-          if (mistake.originalFileId) {
-            const sourceMetadata = await window.ipcRenderer.invoke('file:get-mistake-details', mistake.originalFileId)
-            if (sourceMetadata.success && sourceMetadata.data) {
-              mistake.metadata = sourceMetadata.data.metadata
-            }
-          }
-        }
-      }
-
+      // 存储完整数据
       exportedList.value = result.data
+      
+      // 开始渐进式加载
+      await loadBatch()
+      isInitialLoading.value = false
     } else {
       throw new Error(result.error)
     }
@@ -216,6 +176,63 @@ onMounted(async () => {
     error.value = '加载失败'
   } finally {
     loading.value = false
+  }
+})
+
+// 添加批量加载函数
+const BATCH_SIZE = 1 // 每批加载一个日期的数据
+const loadBatch = async () => {
+  if (isLoadingMore.value || allDataLoaded.value) return
+  
+  isLoadingMore.value = true
+  try {
+    const currentLength = loadedData.value.length
+    const nextBatch = exportedList.value.slice(currentLength, currentLength + BATCH_SIZE)
+    
+    // 为每个新批次的数据加载详细信息
+    for (const item of nextBatch) {
+      for (const mistake of item.mistakes) {
+        if (mistake.originalFileId) {
+          const sourceMetadata = await window.ipcRenderer.invoke('file:get-mistake-details', mistake.originalFileId)
+          if (sourceMetadata.success && sourceMetadata.data) {
+            mistake.metadata = sourceMetadata.data.metadata
+          }
+        }
+      }
+    }
+    
+    // 将新批次的数据添加到已加载数据中
+    loadedData.value = [...loadedData.value, ...nextBatch]
+    
+    // 检查是否所有数据都已加载
+    if (loadedData.value.length >= exportedList.value.length) {
+      allDataLoaded.value = true
+    }
+  } catch (error) {
+    console.error('加载批次数据失败:', error)
+  } finally {
+    isLoadingMore.value = false
+  }
+}
+
+// 添加自动加载下一批数据的观察器
+const observer = ref<IntersectionObserver | null>(null)
+const lastItemRef = ref<HTMLElement | null>(null)
+
+onMounted(() => {
+  observer.value = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && !isLoadingMore.value && !allDataLoaded.value) {
+        loadBatch()
+      }
+    },
+    { threshold: 0.5 }
+  )
+})
+
+onUnmounted(() => {
+  if (observer.value) {
+    observer.value.disconnect()
   }
 })
 
@@ -388,7 +405,7 @@ const selectAllItems = () => {
   if (!isSelectMode.value) return
   
   const allItems: ExportedMistake[] = []
-  filteredExportedList.value.forEach(dateItem => {
+  exportedList.value.forEach(dateItem => {
     dateItem.mistakes.forEach(mistake => {
       allItems.push(mistake)
     })
@@ -489,6 +506,74 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
     exportingDates.value[date] = false
   }
 }
+
+// 添加计算属性，使用 loadedData
+const sortedExportedList = computed(() => {
+  return loadedData.value.map(item => {
+    const sortedMistakes = [...item.mistakes].sort((a, b) => {
+      const getNumber = (path: string) => {
+        const match = path.match(/错题(\d+)\./);
+        return match ? parseInt(match[1]) : 0;
+      };
+      return getNumber(a.path) - getNumber(b.path);
+    });
+    
+    return {
+      ...item,
+      mistakes: sortedMistakes
+    };
+  }).sort((a, b) => {
+    const dateA = new Date(a.date.replace(/-/g, '/')).getTime();
+    const dateB = new Date(b.date.replace(/-/g, '/')).getTime();
+    return dateB - dateA;
+  });
+});
+
+// 添加过滤后的计算属性
+const filteredExportedList = computed(() => {
+  return sortedExportedList.value.map(item => {
+    const filteredMistakes = item.mistakes.filter(mistake => {
+      if (filterType.value === 'all') return true;
+      return mistake.exportType === filterType.value;
+    });
+    
+    return {
+      ...item,
+      mistakes: filteredMistakes
+    };
+  }).filter(item => item.mistakes.length > 0);
+});
+
+// 添加观察者的设置
+const setupObserver = () => {
+  if (lastItemRef.value && observer.value) {
+    observer.value.observe(lastItemRef.value)
+  }
+}
+
+// 添加观察者的清理
+const cleanupObserver = () => {
+  if (lastItemRef.value && observer.value) {
+    observer.value.unobserve(lastItemRef.value)
+  }
+}
+
+// 监听 lastItemRef 的变化
+watch(lastItemRef, (newRef, oldRef) => {
+  if (oldRef) {
+    cleanupObserver()
+  }
+  if (newRef) {
+    setupObserver()
+  }
+})
+
+// 在组件卸载时清理
+onUnmounted(() => {
+  if (observer.value) {
+    observer.value.disconnect()
+  }
+})
 </script>
 
 <template>
@@ -530,14 +615,15 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
       </el-radio-group>
     </div>
 
-    <el-empty v-if="!loading && filteredExportedList.length === 0" description="暂无导出记录" />
+    <el-empty v-if="!isInitialLoading && filteredExportedList.length === 0" description="暂无导出记录" />
     
-    <el-skeleton :loading="loading" animated :count="4" v-else>
+    <el-skeleton :loading="isInitialLoading" animated :count="4" v-else>
       <template #default>
         <div class="export-list">
-          <div v-for="item in filteredExportedList" 
+          <div v-for="(item, index) in filteredExportedList" 
                :key="item.date" 
-               class="export-item">
+               class="export-item"
+               :ref="index === filteredExportedList.length - 1 ? (el) => { lastItemRef = el } : undefined">
             <div class="export-header">
               <div class="date-info">
                 <el-icon><Document /></el-icon>
@@ -611,6 +697,16 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
                 </div>
               </div>
             </div>
+          </div>
+          
+          <!-- 添加加载更多提示 -->
+          <div v-if="isLoadingMore" class="loading-more">
+            <el-skeleton animated :count="1" />
+          </div>
+          
+          <!-- 添加全部加载完成提示 -->
+          <div v-if="allDataLoaded" class="all-loaded">
+            <el-divider>已加载全部内容</el-divider>
           </div>
         </div>
       </template>
@@ -719,6 +815,7 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
   padding: 16px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  animation: fadeInUp 0.5s ease-out;
 }
 
 .export-item:hover {
@@ -1355,5 +1452,33 @@ const handleExportToWord = async (date: string, type: string = 'alternate') => {
 .mistake-item:hover .duplicate-hint {
   background-color: rgba(144, 147, 153, 0.9);
   transform: scale(1.05);
+}
+
+/* 添加新的样式 */
+.loading-more {
+  padding: 20px;
+  text-align: center;
+}
+
+.all-loaded {
+  padding: 20px;
+  text-align: center;
+  color: #909399;
+}
+
+/* 添加渐入动画 */
+.export-item {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style> 

@@ -4,6 +4,7 @@ import type { MistakeItem, TrainingRecord } from '../../electron/preload'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElDropdown } from 'element-plus'
+import * as echarts from 'echarts'
 
 const mistakeList = ref<MistakeItem[]>([])
 const loading = ref(true)
@@ -116,6 +117,110 @@ const statistics = computed(() => {
 
   return stats
 })
+
+// 修改计算熟练度分布的函数
+const proficiencyDistribution = computed(() => {
+  const distribution = {
+    '熟练度0': 0,
+    '熟练度10': 0,
+    '熟练度20': 0,
+    '熟练度30': 0,
+    '熟练度40': 0,
+    '熟练度50以上': 0
+  }
+
+  mistakeList.value.forEach(item => {
+    const proficiency = item.metadata?.proficiency || 0
+    if (proficiency === 0) distribution['熟练度0']++
+    else if (proficiency === 10) distribution['熟练度10']++
+    else if (proficiency === 20) distribution['熟练度20']++
+    else if (proficiency === 30) distribution['熟练度30']++
+    else if (proficiency === 40) distribution['熟练度40']++
+    else if (proficiency >= 50) distribution['熟练度50以上']++
+  })
+
+  return distribution
+})
+
+// 修改初始化雷达图的函数
+const initRadarChart = () => {
+  if (!radarChartRef.value) return
+  
+  if (radarChart) {
+    radarChart.dispose()
+  }
+
+  radarChart = echarts.init(radarChartRef.value)
+  
+  const distribution = proficiencyDistribution.value
+  
+  const option = {
+    title: {
+      text: '错题熟练度分布',
+      left: 'center',
+      top: 20,
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'bold'
+      }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: any) => {
+        return `${params.name}: ${params.value}题`
+      }
+    },
+    radar: {
+      shape: 'circle',
+      indicator: Object.keys(distribution).map(name => ({
+        name,
+        max: Math.max(...Object.values(distribution)) + 2
+      })),
+      radius: '60%',
+      splitNumber: 4,
+      axisName: {
+        color: '#666',
+        fontSize: 12
+      },
+      splitArea: {
+        areaStyle: {
+          color: ['#f5f7fa', '#e4e7ed', '#ebeef5', '#f2f6fc']
+        }
+      }
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: Object.values(distribution),
+        name: '题目数量',
+        symbol: 'circle',
+        symbolSize: 6,
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(103,194,58,0.6)' },  // 使用 Element Plus 的成功色
+            { offset: 1, color: 'rgba(103,194,58,0.2)' }
+          ])
+        },
+        lineStyle: {
+          color: '#67c23a',
+          width: 2
+        },
+        itemStyle: {
+          color: '#67c23a'
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#67c23a',
+            shadowBlur: 10,
+            shadowColor: 'rgba(103,194,58,0.5)'
+          }
+        }
+      }]
+    }]
+  }
+  
+  radarChart.setOption(option)
+}
 
 // 修改获取数据的过滤逻辑
 onMounted(async () => {
@@ -347,6 +452,43 @@ onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
 })
 
+// 添加雷达图相关的状态
+const showRadarChart = ref(false)
+const radarChartRef = ref<HTMLElement | null>(null)
+let radarChart: echarts.ECharts | null = null
+
+// 添加显示/隐藏雷达图的处理函数
+const toggleRadarChart = () => {
+  showRadarChart.value = !showRadarChart.value
+  if (showRadarChart.value) {
+    // 在下一个 tick 初始化图表，确保 DOM 已更新
+    setTimeout(() => {
+      initRadarChart()
+    }, 0)
+  }
+}
+
+// 添加窗口大小变化的处理
+const handleResize = () => {
+  if (radarChart && showRadarChart.value) {
+    radarChart.resize()
+  }
+}
+
+// 在组件卸载时清理
+onUnmounted(() => {
+  if (radarChart) {
+    radarChart.dispose()
+  }
+  window.removeEventListener('resize', handleResize)
+})
+
+// 在组件挂载时添加窗口大小变化监听
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  document.addEventListener('click', closeContextMenu)
+})
+
 defineComponent({
   name: 'Mistake'
 })
@@ -354,8 +496,8 @@ defineComponent({
 
 <template>
   <div class="mistake-container">
-    <!-- 添加统计信息展示 -->
-    <div class="statistics-bar">
+    <!-- 修改统计信息展示，添加点击事件 -->
+    <div class="statistics-bar" @click="toggleRadarChart">
       <div class="stat-item">
         <div class="stat-value">{{ statistics.total }}</div>
         <div class="stat-label">总错题数</div>
@@ -377,6 +519,17 @@ defineComponent({
         <div class="stat-label">平均熟练度</div>
       </div>
     </div>
+
+    <!-- 添加雷达图对话框 -->
+    <el-dialog
+      v-model="showRadarChart"
+      title="错题熟练度分布"
+      width="80%"
+      :destroy-on-close="true"
+      class="radar-chart-dialog"
+    >
+      <div ref="radarChartRef" class="radar-chart"></div>
+    </el-dialog>
 
     <!-- 添加顶部导航栏 -->
     <div class="nav-header">
@@ -1084,5 +1237,15 @@ defineComponent({
 
 .stat-value {
   animation: countUp 0.5s ease-out;
+}
+
+/* 添加雷达图相关样式 */
+.radar-chart {
+  width: 100%;
+  height: 500px;
+}
+
+.radar-chart-dialog :deep(.el-dialog__body) {
+  padding: 20px;
 }
 </style> 

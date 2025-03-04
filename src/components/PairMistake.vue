@@ -371,21 +371,27 @@ const handleConfirm = () => {
 
 .preview-area {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px;
   grid-template-columns: 1fr;
+  max-width: 1200px;  /* 限制最大宽度 */
+  margin: 0 auto;     /* 居中显示 */
+  overflow-x: hidden; /* 防止横向滚动 */
 }
 
 .preview-item {
   position: relative;
   border: 2px solid transparent;
   border-radius: 8px;
-  padding: 8px;
+  padding: 12px;
   transition: all 0.3s ease;
   animation: fadeIn 0.5s ease-in-out;
   display: flex;
   flex-direction: column;
-  min-height: 320px;
+  height: 400px;     /* 减小高度 */
+  max-width: 500px;  /* 限制最大宽度 */
+  margin: 0 auto;    /* 居中显示 */
+  width: 100%;       /* 确保响应式 */
 }
 
 @keyframes fadeIn {
@@ -479,26 +485,10 @@ const handleConfirm = () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* 更精确的响应式断点 */
-/* 600px是一个项目的最小宽度加上容器padding和项目间距 */
-@media screen and (min-width: 600px) {
+/* 更新响应式布局 */
+@media screen and (min-width: 768px) {
   .preview-area {
-    grid-template-columns: repeat(1, 1fr); /* 设置为1列 */
-  }
-}
-
-/* 920px是两个项目的最小宽度加上容器padding和项目间距 */
-@media screen and (min-width: 920px) {
-  .preview-area {
-    grid-template-columns: repeat(2, 1fr); /* 设置为2列 */
-    grid-template-columns: repeat(3, 1fr); /* 3列 */
-  }
-}
-
-/* 只在非常宽的屏幕上才考虑4列 */
-@media screen and (min-width: 1240px) {
-  .preview-area {
-    grid-template-columns: repeat(4, 1fr); /* 4列 */
+    grid-template-columns: repeat(2, 1fr); /* 最多2列 */
   }
 }
 

@@ -611,7 +611,7 @@ const filteredExportedList = computed(() => {
       </div>
       
       <div class="training-control" v-if="isTraining">
-        <el-button-group>
+        <div style="display: flex; gap: 40px;">
           <el-button 
             type="success" 
             :icon="Check"
@@ -630,7 +630,7 @@ const filteredExportedList = computed(() => {
           >
             {{ isSubmitting ? '提交中...' : '没记住' }}
           </el-button>
-        </el-button-group>
+        </div>
         
         <!-- 添加训练状态提示 -->
         <div v-if="!canTrain" class="training-tip">
@@ -892,23 +892,7 @@ const filteredExportedList = computed(() => {
 }
 
 .training-control .el-button {
-  padding: 12px 24px;
-  font-size: 16px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.training-control .el-button:not(.is-disabled):hover {
-  transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
-}
-
-.training-control .el-button:not(.is-disabled):active {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
-}
-
-.training-control .el-button + .el-button {
-  margin-left: 16px;
+  margin: 0 20px;
 }
 
 .training-tip {

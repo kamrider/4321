@@ -2072,12 +2072,142 @@ ipcMain.handle('file:get-exported-mistakes', async () => {
     // 10. 按日期倒序排序
     dateResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    return { success: true, data: dateResults }
+    // 11. 检测并删除重复项
+    const { cleanedData, deletedCount } = await removeExportedDuplicates(dateResults)
+
+    if (deletedCount > 0) {
+      console.log(`已删除 ${deletedCount} 个重复的错题记录`)
+    }
+
+    return { success: true, data: cleanedData }
   } catch (error) {
     console.error('获取导出记录失败:', error)
     return { success: false, error: error.message }
   }
 })
+
+// 添加删除重复导出记录的函数
+async function removeExportedDuplicates(dateResults) {
+  try {
+    // 用于跟踪已处理的错题，按 originalFileId 分组
+    const processedMistakes = new Map()
+    let deletedCount = 0
+
+    // 首先，对同一天内的错题按序号排序（序号越大，越新）
+    for (const dateResult of dateResults) {
+      dateResult.mistakes.sort((a, b) => {
+        const numA = parseInt(path.basename(a.path).match(/\d+/)?.[0] || '0')
+        const numB = parseInt(path.basename(b.path).match(/\d+/)?.[0] || '0')
+        return numB - numA // 倒序排列，序号大的在前面
+      })
+    }
+
+    // 按日期倒序遍历（最新的日期在前面）
+    for (const dateResult of dateResults) {
+      const date = dateResult.date
+      const datePath = dateResult.path
+      const mistakesToKeep = []
+
+      // 遍历当前日期下的所有错题
+      for (const mistake of dateResult.mistakes) {
+        const originalFileId = mistake.originalFileId
+
+        // 如果没有 originalFileId，保留该错题
+        if (!originalFileId) {
+          mistakesToKeep.push(mistake)
+          continue
+        }
+
+        // 检查是否已经处理过相同 originalFileId 的错题
+        if (processedMistakes.has(originalFileId)) {
+          // 已经有更新的错题，删除当前这个
+          await deleteMistakeFiles(datePath, mistake)
+          deletedCount++
+        } else {
+          // 这是第一次遇到这个 originalFileId，保留它
+          processedMistakes.set(originalFileId, {
+            date,
+            mistake
+          })
+          mistakesToKeep.push(mistake)
+        }
+      }
+
+      // 更新当前日期的错题列表
+      dateResult.mistakes = mistakesToKeep
+    }
+
+    // 过滤掉没有错题的日期文件夹
+    const cleanedData = dateResults.filter(dateResult => dateResult.mistakes.length > 0)
+
+    return { cleanedData, deletedCount }
+  } catch (error) {
+    console.error('删除重复错题失败:', error)
+    return { cleanedData: dateResults, deletedCount: 0 }
+  }
+}
+
+// 删除错题相关的所有文件
+async function deleteMistakeFiles(datePath, mistake) {
+  try {
+    const mistakePath = mistake.path
+    const mistakeFileName = path.basename(mistakePath)
+    const mistakeNumber = path.parse(mistakeFileName).name.replace(/^错题/, '')
+    
+    const mistakesDir = path.join(datePath, '错题')
+    const answersDir = path.join(datePath, '答案')
+    const metadataDir = path.join(datePath, 'metadata')
+    const previewsDir = path.join(datePath, 'previews')
+
+    // 1. 删除错题文件
+    if (fs.existsSync(mistakePath)) {
+      await fs.promises.unlink(mistakePath)
+    }
+
+    // 2. 删除错题预览图
+    const previewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+    if (fs.existsSync(previewPath)) {
+      await fs.promises.unlink(previewPath)
+    }
+
+    // 3. 删除错题元数据
+    const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
+    if (fs.existsSync(metadataPath)) {
+      await fs.promises.unlink(metadataPath)
+    }
+
+    // 4. 删除相关的答案文件
+    const answerPattern = new RegExp(`^${mistakeNumber}\\.`)
+    const answerFiles = fs.readdirSync(answersDir)
+      .filter(file => answerPattern.test(file))
+    
+    for (const answerFile of answerFiles) {
+      // 删除答案文件
+      const answerPath = path.join(answersDir, answerFile)
+      if (fs.existsSync(answerPath)) {
+        await fs.promises.unlink(answerPath)
+      }
+      
+      // 删除答案预览图
+      const answerPreviewPath = path.join(previewsDir, `答案${answerFile}.webp`)
+      if (fs.existsSync(answerPreviewPath)) {
+        await fs.promises.unlink(answerPreviewPath)
+      }
+      
+      // 删除答案元数据
+      const answerMetadataPath = path.join(metadataDir, `答案${answerFile}.json`)
+      if (fs.existsSync(answerMetadataPath)) {
+        await fs.promises.unlink(answerMetadataPath)
+      }
+    }
+
+    console.log(`已删除重复错题: ${mistakePath}`)
+    return true
+  } catch (error) {
+    console.error(`删除错题文件失败:`, error)
+    return false
+  }
+}
 
 // 添加删除导出记录的处理函数
 ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
@@ -2093,6 +2223,137 @@ ipcMain.handle('file:delete-exported-mistakes', async (_, date: string) => {
     return { success: false, error: '目录不存在' }
   } catch (error) {
     console.error('删除导出记录失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 添加手动清理重复导出记录的处理函数
+ipcMain.handle('file:clean-exported-duplicates', async () => {
+  try {
+    const exportBaseDir = getExportBaseDir()
+    
+    // 1. 检查导出目录是否存在
+    if (!fs.existsSync(exportBaseDir)) {
+      return { success: true, data: { deletedCount: 0 } }
+    }
+
+    // 2. 获取所有日期文件夹
+    const dateDirs = fs.readdirSync(exportBaseDir)
+    
+    // 3. 并行处理每个日期文件夹，获取所有错题记录
+    const datePromises = dateDirs.map(async dateDir => {
+      const datePath = path.join(exportBaseDir, dateDir)
+      const mistakesDir = path.join(datePath, '错题')
+      const answersDir = path.join(datePath, '答案')
+      const metadataDir = path.join(datePath, 'metadata')
+      const previewsDir = path.join(datePath, 'previews')
+      
+      // 检查必要的目录是否存在
+      if (!fs.existsSync(mistakesDir) || !fs.existsSync(answersDir)) {
+        return null
+      }
+
+      // 读取该日期下的所有错题并按序号排序
+      const mistakes = fs.readdirSync(mistakesDir)
+        .filter(file => !file.startsWith('.'))
+        .sort((a, b) => {
+          const numA = parseInt(a.match(/\d+/)?.[0] || '0')
+          const numB = parseInt(b.match(/\d+/)?.[0] || '0')
+          return numA - numB
+        })
+      
+      // 并行处理每个错题
+      const mistakePromises = mistakes.map(async mistake => {
+        const mistakePath = path.join(mistakesDir, mistake)
+        const mistakeNumber = path.parse(mistake).name.replace(/^错题/, '')
+        const metadataPath = path.join(metadataDir, `错题${mistakeNumber}.json`)
+        
+        // 读取错题元数据（如果存在）
+        let mistakeMetadata = null
+        if (fs.existsSync(metadataPath)) {
+          try {
+            const metadataContent = await fs.promises.readFile(metadataPath, 'utf-8')
+            mistakeMetadata = JSON.parse(metadataContent)
+          } catch (error) {
+            console.error('读取错题元数据失败:', error)
+          }
+        }
+
+        // 处理预览图路径
+        let preview = ''
+        const previewPath = path.join(previewsDir, `错题${mistakeNumber}.webp`)
+        
+        // 直接使用文件路径
+        preview = `file://${previewPath}`
+
+        // 并行处理对应的答案
+        const answerPattern = new RegExp(`^${mistakeNumber}\\.`)
+        const answerFiles = fs.readdirSync(answersDir)
+          .filter(file => answerPattern.test(file))
+        
+        const answerPromises = answerFiles.map(async file => {
+          const answerPath = path.join(answersDir, file)
+          const answerMetadataPath = path.join(metadataDir, `答案${file}.json`)
+          const answerPreviewPath = path.join(previewsDir, `答案${file}.webp`)
+          
+          // 读取答案元数据
+          let answerMetadata = null
+          if (fs.existsSync(answerMetadataPath)) {
+            try {
+              const metadataContent = await fs.promises.readFile(answerMetadataPath, 'utf-8')
+              answerMetadata = JSON.parse(metadataContent)
+            } catch (error) {
+              console.error('读取答案元数据失败:', error)
+            }
+          }
+
+          return {
+            path: answerPath,
+            preview: `file://${answerPreviewPath}`,
+            originalFileId: answerMetadata?.originalFileId,
+            metadata: answerMetadata?.metadata
+          }
+        })
+
+        const answers = await Promise.all(answerPromises)
+
+        return {
+          path: mistakePath,
+          preview,
+          originalFileId: mistakeMetadata?.originalFileId,
+          exportType: mistakeMetadata?.exportType,
+          metadata: mistakeMetadata?.metadata,
+          answers
+        }
+      })
+
+      const mistakeResults = await Promise.all(mistakePromises)
+      
+      return {
+        date: dateDir,
+        path: datePath,
+        mistakes: mistakeResults.filter(Boolean) // 过滤掉可能的null结果
+      }
+    })
+
+    // 等待所有日期处理完成
+    const dateResults = (await Promise.all(datePromises)).filter(Boolean)
+
+    // 按日期倒序排序
+    dateResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+    // 检测并删除重复项
+    const { cleanedData, deletedCount } = await removeExportedDuplicates(dateResults)
+
+    return { 
+      success: true, 
+      data: { 
+        deletedCount,
+        remainingCount: cleanedData.reduce((total, date) => total + date.mistakes.length, 0)
+      } 
+    }
+  } catch (error) {
+    console.error('清理重复导出记录失败:', error)
     return { success: false, error: error.message }
   }
 })

@@ -249,6 +249,10 @@ export interface IpcRenderer {
       success: boolean
       error?: string
     }>
+    cleanExportedDuplicates: () => Promise<{
+      success: boolean
+      error?: string
+    }>
     exportToWord: (items: ExportToWordItem[]) => Promise<ExportToWordResult>
     setFrozen: (fileId: string, isFrozen: boolean) => Promise<{
       success: boolean
@@ -422,6 +426,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     getMistakeDetails: (fileId: string) => ipcRenderer.invoke('file:get-mistake-details', fileId),
     getExportedMistakes: () => ipcRenderer.invoke('file:get-exported-mistakes'),
     deleteExportedMistakes: (date: string) => ipcRenderer.invoke('file:delete-exported-mistakes', date),
+    cleanExportedDuplicates: () => ipcRenderer.invoke('file:clean-exported-duplicates'),
     exportToWord: (items: ExportToWordItem[]) => 
       ipcRenderer.invoke('file:export-to-word', items),
     setFrozen: (fileId: string, isFrozen: boolean) => 
@@ -583,6 +588,10 @@ declare global {
         getMistakeDetails: (fileId: string) => Promise<Result<MistakeItem>>
         getExportedMistakes: () => Promise<Result<MistakeItem[]>>
         deleteExportedMistakes: (date: string) => Promise<{
+          success: boolean
+          error?: string
+        }>
+        cleanExportedDuplicates: () => Promise<{
           success: boolean
           error?: string
         }>

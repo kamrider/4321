@@ -32,6 +32,7 @@ interface ExportedItem {
 const exportedList = ref<ExportedItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const cleaningDuplicates = ref(false)
 
 // 添加预览相关的状态
 const dialogVisible = ref(false)
@@ -454,6 +455,29 @@ const filteredExportedList = computed(() => {
     };
   }).filter(item => item.mistakes.length > 0);
 });
+
+// 添加清理重复项的函数
+const handleCleanDuplicates = async () => {
+  try {
+    cleaningDuplicates.value = true
+    const result = await window.ipcRenderer.file.cleanExportedDuplicates()
+    if (result.success) {
+      ElMessage.success(`清理成功，已删除 ${result.data.deletedCount} 个重复项，剩余 ${result.data.remainingCount} 个错题`)
+      // 重新加载数据
+      const reloadResult = await window.ipcRenderer.invoke('file:get-exported-mistakes')
+      if (reloadResult.success) {
+        exportedList.value = reloadResult.data
+      }
+    } else {
+      throw new Error(result.error)
+    }
+  } catch (error) {
+    console.error('清理重复项失败:', error)
+    ElMessage.error('清理失败: ' + (error.message || '未知错误'))
+  } finally {
+    cleaningDuplicates.value = false
+  }
+}
 </script>
 
 <template>
@@ -488,11 +512,24 @@ const filteredExportedList = computed(() => {
         </template>
       </div>
       
-      <el-radio-group v-model="filterType" size="large">
-        <el-radio-button label="all">全部记录</el-radio-button>
-        <el-radio-button label="selected">选择导出</el-radio-button>
-        <el-radio-button label="training">训练导出</el-radio-button>
-      </el-radio-group>
+      <div class="filter-actions">
+        <el-radio-group v-model="filterType" size="large">
+          <el-radio-button label="all">全部记录</el-radio-button>
+          <el-radio-button label="selected">选择导出</el-radio-button>
+          <el-radio-button label="training">训练导出</el-radio-button>
+        </el-radio-group>
+        
+        <!-- 添加清理重复项按钮 -->
+        <el-button 
+          type="warning" 
+          :loading="cleaningDuplicates"
+          @click="handleCleanDuplicates"
+          style="margin-left: 16px;"
+        >
+          <el-icon><Delete /></el-icon>
+          清理重复项
+        </el-button>
+      </div>
     </div>
 
     <el-empty v-if="!loading && filteredExportedList.length === 0" description="暂无导出记录" />
@@ -1333,5 +1370,16 @@ const filteredExportedList = computed(() => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
 }
 </style> 
